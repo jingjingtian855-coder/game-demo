@@ -926,18 +926,21 @@ button:focus-visible { outline:3px solid var(--magenta);outline-offset:4px; }
 @keyframes textParagraphOut { from{opacity:1;filter:blur(0)}to{opacity:0;filter:blur(7px)} }
 @keyframes prologueBackdropDrift { from{transform:scale(1.035) translate3d(-.35%,0,0)}to{transform:scale(1.065) translate3d(.35%,-.45%,0)} }
 
-/* Keep the wake instruction and its light target in separate visual zones. */
+/* Preserve the painted prompt; only nudge the live copy right inside it. */
+.cinematic-screen .cinematic-prompt { padding-left:200px; }
 .cinematic-screen[data-phase="wake"] .cinematic-prompt,
 .cinematic-screen[data-phase="chase"] .cinematic-prompt {
-  left:auto;right:clamp(24px,6vw,92px);bottom:9%;transform:none;
+  left:auto;right:clamp(24px,6vw,92px);top:auto;bottom:9%;transform:none;
 }
 .cinematic-screen[data-phase="wake"] .wake-hotspot { left:16%;top:51%; }
 @media (max-width:780px) {
-  .cinematic-screen[data-phase="wake"] .cinematic-prompt { left:50%;right:auto;bottom:5%;width:92vw;transform:translateX(-50%); }
+  .cinematic-screen .cinematic-prompt { padding-left:136px; }
+  .cinematic-screen[data-phase="wake"] .cinematic-prompt { left:50%;right:auto;top:auto;bottom:5%;width:92vw;transform:translateX(-50%); }
   .cinematic-screen[data-phase="wake"] .wake-hotspot { left:19%;top:39%; }
 }
 @media (max-height:560px) {
-  .cinematic-screen[data-phase="wake"] .cinematic-prompt { left:auto;right:2%;bottom:4%;width:64vw;transform:none; }
+  .cinematic-screen .cinematic-prompt { padding-left:200px; }
+  .cinematic-screen[data-phase="wake"] .cinematic-prompt { left:auto;right:2%;top:auto;bottom:4%;width:64vw;transform:none; }
   .cinematic-screen[data-phase="chase"] .cinematic-prompt { left:auto;right:2%;bottom:4%;width:54vw;transform:none; }
   .cinematic-screen[data-phase="wake"] .wake-hotspot { left:15%;top:36%; }
 }
