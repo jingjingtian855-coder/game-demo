@@ -1,0 +1,14 @@
+{
+  "name": "star-tail-game",
+  "private": true,
+  "version": "0.2.0",
+  "scripts": {
+    "build:3d": "esbuild chapter-one-3d.js --bundle --minify --format=iife --platform=browser --loader:.glb=dataurl --outfile=chapter-one-3d.bundle.js"
+  },
+  "dependencies": {
+    "three": "latest"
+  },
+  "devDependencies": {
+    "esbuild": "latest"
+  }
+}

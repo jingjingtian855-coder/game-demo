@@ -1,0 +1,12 @@
+node_modules/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+
+# Local visual QA output
+tools/check-*.png
+tools/chapter-live-*.png
+tools/chapter-mobile-*.png

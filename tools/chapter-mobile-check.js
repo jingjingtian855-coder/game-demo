@@ -1,0 +1,37 @@
+const { chromium } = require("playwright");
+const path = require("path");
+const { pathToFileURL } = require("url");
+
+(async () => {
+  const browser = await chromium.launch({ headless: true, executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", args: ["--use-angle=swiftshader"] });
+  const context = await browser.newContext({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  const errors = [];
+  page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+  page.on("pageerror", error => errors.push(error.message));
+  await page.goto(pathToFileURL(path.resolve(__dirname, "..", "index.html")).href, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("#titleScreen.is-active", { timeout: 7000 });
+  await page.click("#startButton");
+  await page.waitForTimeout(250);
+  await page.click("#textPrologueSkip");
+  await page.waitForTimeout(220);
+  await page.click("#skipCinematic");
+  await page.waitForSelector("#chapter3dGate:not([hidden])", { timeout: 4000 });
+  await page.click("#chapter3dEnter");
+  await page.waitForTimeout(700);
+  const before = await page.evaluate(() => window.__starTailChapter.snapshot());
+  const rect = await page.locator("#chapter3dJoystick").boundingBox();
+  await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(rect.x + rect.width / 2, rect.y + 8, { steps: 4 });
+  await page.waitForTimeout(850);
+  await page.mouse.up();
+  await page.waitForTimeout(120);
+  await page.click("#chapter3dTouchSense");
+  await page.click("#chapter3dTouchJump");
+  await page.waitForTimeout(300);
+  const after = await page.evaluate(() => window.__starTailChapter.snapshot());
+  await page.screenshot({ path: path.resolve(__dirname, "chapter-mobile-live.png") });
+  console.log(JSON.stringify({ errors, before, after, joystick: rect }, null, 2));
+  await browser.close();
+})().catch(error => { console.error(error); process.exit(1); });

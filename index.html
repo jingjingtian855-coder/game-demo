@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#07111f" />
+  <meta name="description" content="《星尾归航》— 一只失去记忆的橘猫追随星际遗迹中的记忆锚点，寻找自己与回家坐标的互动叙事 H5 游戏。" />
+  <title>星尾归航｜STARTAIL</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main id="app" aria-live="polite">
+    <section id="loadingScreen" class="screen loading-screen is-active" aria-label="正在加载星尾归航">
+      <div class="loading-backdrop" aria-hidden="true"></div>
+      <div class="loading-grid" aria-hidden="true"></div>
+      <div class="loading-content">
+        <div class="loading-emblem" aria-hidden="true">
+          <span class="loading-orbit orbit-a"></span>
+          <span class="loading-orbit orbit-b"></span>
+          <i class="loading-paw">●</i>
+        </div>
+        <div class="loading-kicker">STARTAIL / NAVIGATION BOOT</div>
+        <h1>星尾归航</h1>
+        <div class="loading-readout">
+          <span id="loadingText">正在校准休眠舱信号</span>
+          <strong id="loadingPercent">0%</strong>
+        </div>
+        <div class="loading-track" aria-hidden="true">
+          <i id="loadingFill"></i><b></b>
+        </div>
+        <div class="loading-foot"><span>STARDATE 2749.07</span><span>HOME SIGNAL / SEARCHING</span></div>
+      </div>
+    </section>
+
+    <section id="titleScreen" class="screen title-screen">
+      <div class="title-backdrop" aria-hidden="true"></div>
+      <div class="title-orbit orbit-one" aria-hidden="true"></div>
+      <div class="title-orbit orbit-two" aria-hidden="true"></div>
+      <div class="title-copy">
+        <div class="eyebrow">STARTAIL / INTERACTIVE STORY</div>
+        <h1>星尾归航</h1>
+        <p class="title-lead">在宇宙最安静的地方，听见回家的声音。</p>
+        <button id="startButton" class="primary-button" type="button">
+          <span>开始旅程</span><i aria-hidden="true">→</i>
+        </button>
+        <p class="controls-hint">键盘 A/D 或 ←/→ 移动 · 空格跳跃 · E 互动 · Shift 感知</p>
+      </div>
+      <div class="title-cat cat-display" aria-hidden="true">
+        <div class="cat-tail"></div><div class="cat-body"></div><div class="cat-chest"></div>
+        <div class="cat-head"><i class="ear left"></i><i class="ear right"></i><i class="eye left"></i><i class="eye right"></i><i class="nose"></i><i class="stripe s1"></i><i class="stripe s2"></i></div>
+        <div class="cat-leg back"></div><div class="cat-leg front"></div><div class="cat-collar"></div>
+      </div>
+      <div class="title-footer"><span>一段约 10 分钟的猫咪科幻旅程</span><span>建议开启声音</span></div>
+    </section>
+
+    <section id="textPrologueScreen" class="screen text-prologue-screen" aria-label="故事背景">
+      <div class="text-prologue-space" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="text-prologue-copy">
+        <small id="textPrologueKicker" aria-hidden="true"></small>
+        <p id="textPrologueLine" aria-live="polite"></p>
+      </div>
+      <div id="textPrologueProgress" class="text-prologue-progress" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <button id="textPrologueSkip" class="text-prologue-skip" type="button">跳过</button>
+    </section>
+
+    <section id="cinematicScreen" class="screen cinematic-screen" aria-label="互动序章：失重乱流">
+      <video id="prologueVideo" preload="auto" playsinline poster="assets/video/scene-01/scene-01-poster.jpg">
+        <source src="assets/video/scene-01/scene-01-zero-g-turbulence.mp4" type="video/mp4" />
+      </video>
+      <div class="cinematic-shade" aria-hidden="true"></div>
+      <header class="cinematic-chrome">
+        <div class="cinematic-progress"><i id="cinematicProgress"></i></div>
+        <button id="skipCinematic" class="skip-button" type="button">跳过序章</button>
+      </header>
+      <div id="cinematicPrompt" class="cinematic-prompt" hidden>
+        <small id="cinematicStep">第一步 · 苏醒</small>
+        <strong id="cinematicInstruction">轻触舱壁，唤醒小猫</strong>
+        <span id="cinematicSubtext">休眠舱外传来陌生的震动</span>
+      </div>
+      <button id="wakeHotspot" class="cinematic-hotspot wake-hotspot" type="button" aria-label="轻触舱壁唤醒小猫" hidden><i></i><span>唤醒</span></button>
+      <button id="orbHotspot" class="cinematic-hotspot orb-hotspot" type="button" aria-label="追逐漂浮光点" hidden><i></i><span id="orbCounter">0 / 3</span></button>
+      <div id="turbulenceQte" class="turbulence-qte" hidden>
+        <div class="stability-label"><span>休眠舱稳定度</span><strong id="stabilityPercent">62%</strong></div>
+        <div class="stability-track"><i id="stabilityFill"></i><b></b></div>
+        <button id="stabilityButton" type="button"><span>按住抵抗乱流</span><small>长按空格</small></button>
+      </div>
+      <div id="cinematicResult" class="cinematic-result" hidden><i></i><span>休眠系统已稳定</span></div>
+      <div id="cinematicFlash" class="cinematic-flash" aria-hidden="true"></div>
+    </section>
+
+    <section id="gameScreen" class="screen game-screen" aria-label="游戏区域">
+      <header class="hud">
+        <div class="chapter-mark">
+          <span id="chapterIndex">01</span>
+          <div><small>当前位置</small><strong id="chapterName">漂流货舱</strong></div>
+        </div>
+        <div class="hud-actions">
+          <div id="objective" class="objective">寻找熟悉气味的来源</div>
+          <button id="soundButton" class="icon-button" type="button" aria-label="关闭声音"><span class="sound-on">◖))</span><span class="sound-off">×</span></button>
+          <button id="pauseButton" class="icon-button" type="button" aria-label="暂停">Ⅱ</button>
+        </div>
+      </header>
+
+      <div id="world" class="world scene-0">
+        <div id="sceneBackground" class="scene-background" aria-hidden="true"></div>
+        <div class="scene-light" aria-hidden="true"></div>
+        <div id="particles" class="particles" aria-hidden="true"></div>
+        <div id="senseLayer" class="sense-layer" aria-hidden="true">
+          <div class="sense-vignette"></div>
+          <div id="senseTrails"></div>
+        </div>
+        <div id="objectLayer" class="object-layer"></div>
+
+        <div id="robot" class="robot" aria-label="维修机器人灯泡" hidden>
+          <div class="robot-aura"></div><div class="robot-antenna"></div>
+          <div class="robot-shell"><i class="robot-eye"></i><i class="robot-slot"></i></div>
+          <div class="robot-arm left"></div><div class="robot-arm right"></div>
+        </div>
+
+        <div id="cat" class="cat cat-idle" aria-label="橘猫米粒">
+          <div class="cat-shadow"></div>
+          <div class="cat-tail"></div><div class="cat-body"><i class="body-stripe b1"></i><i class="body-stripe b2"></i><i class="body-stripe b3"></i></div><div class="cat-chest"></div>
+          <div class="cat-head"><i class="ear left"></i><i class="ear right"></i><i class="eye left"></i><i class="eye right"></i><i class="nose"></i><i class="stripe s1"></i><i class="stripe s2"></i></div>
+          <div class="cat-leg back"></div><div class="cat-leg front"></div><div class="cat-collar"><i></i></div>
+        </div>
+
+        <div id="firstPersonView" class="first-person-view" aria-hidden="true">
+          <div class="fp-ground-shadow"></div>
+          <div class="fp-paw fp-paw-left">
+            <div class="fp-foreleg"><i class="fp-stripe stripe-a"></i><i class="fp-stripe stripe-b"></i></div>
+            <div class="fp-foot"><i class="fp-toe toe-a"></i><i class="fp-toe toe-b"></i><i class="fp-toe toe-c"></i><i class="fp-claw claw-a"></i><i class="fp-claw claw-b"></i></div>
+          </div>
+          <div class="fp-paw fp-paw-right">
+            <div class="fp-foreleg"><i class="fp-stripe stripe-a"></i><i class="fp-stripe stripe-b"></i></div>
+            <div class="fp-foot"><i class="fp-toe toe-a"></i><i class="fp-toe toe-b"></i><i class="fp-toe toe-c"></i><i class="fp-claw claw-a"></i><i class="fp-claw claw-b"></i></div>
+          </div>
+        </div>
+
+        <div id="proximityPrompt" class="proximity-prompt" hidden>
+          <span class="prompt-key">E</span><span id="promptText">互动</span>
+        </div>
+        <div id="sceneCaption" class="scene-caption"></div>
+      </div>
+
+      <div id="subtitle" class="subtitle" hidden>
+        <span id="speaker">项圈录音</span><p id="subtitleText"></p>
+      </div>
+
+      <div class="mobile-controls" aria-label="触屏操作">
+        <div class="move-pad">
+          <button id="leftButton" type="button" aria-label="向左移动">‹</button>
+          <button id="rightButton" type="button" aria-label="向右移动">›</button>
+        </div>
+        <div class="action-pad">
+          <button id="senseButton" class="sense-button" type="button"><i></i><span>感知</span></button>
+          <button id="jumpButton" type="button"><span>跳</span></button>
+          <button id="actionButton" class="action-button" type="button"><span>互动</span></button>
+        </div>
+      </div>
+    </section>
+
+    <section id="pauseScreen" class="overlay-screen" aria-label="旅程暂停" hidden>
+      <div class="pause-art-stage">
+        <nav class="panel compact-panel" aria-label="暂停菜单">
+          <button id="resumeButton" class="pause-hotspot pause-resume" type="button" aria-label="继续旅程">继续旅程</button>
+          <button id="restartButton" class="pause-hotspot pause-chapters" type="button" aria-label="章节选择：重新开始第一章">章节选择</button>
+          <button id="settingsButton" class="pause-hotspot pause-settings" type="button" aria-label="设置：切换声音">设置</button>
+          <button id="returnTitleButton" class="pause-hotspot pause-title" type="button" aria-label="返回标题">返回标题</button>
+        </nav>
+      </div>
+    </section>
+
+    <section id="storyOverlay" class="story-overlay" hidden>
+      <div class="story-frame">
+        <div class="story-index" id="storyIndex">记忆 01 / 03</div>
+        <h2 id="storyTitle">乱流之前</h2><p id="storyText"></p>
+        <button id="storyNext" class="primary-button" type="button">继续</button>
+      </div>
+    </section>
+
+    <section id="puzzleOverlay" class="overlay-screen" hidden>
+      <div class="panel puzzle-panel">
+        <div class="eyebrow">SOLAR ARRAY / MANUAL LINK</div>
+        <h2>让三束信号重合</h2>
+        <p>依次点击环轨，校准太阳能阵列的回传方向。</p>
+        <div class="signal-puzzle" aria-label="信号校准谜题">
+          <button class="signal-ring ring-a" data-ring="0" type="button"><i></i><span>外环</span></button>
+          <button class="signal-ring ring-b" data-ring="1" type="button"><i></i><span>中环</span></button>
+          <button class="signal-ring ring-c" data-ring="2" type="button"><i></i><span>内环</span></button>
+          <div class="signal-core"></div>
+        </div>
+        <div id="puzzleStatus" class="puzzle-status">同步率 18%</div>
+        <button id="puzzleClose" class="text-button" type="button">稍后再试</button>
+      </div>
+    </section>
+
+    <section id="endingScreen" class="screen ending-screen">
+      <div id="endingBackdrop" class="ending-backdrop"></div>
+      <div class="ending-copy">
+        <div id="endingEyebrow" class="eyebrow">ENDING 03 / 星光不熄</div>
+        <h2 id="endingTitle">比回家更远的地方</h2>
+        <p id="endingText"></p>
+        <blockquote id="endingQuote"></blockquote>
+        <div class="ending-actions">
+          <button id="replayFinalButton" class="primary-button" type="button">重玩终章</button>
+          <button id="replayButton" class="text-button" type="button">从头开始</button>
+        </div>
+      </div>
+      <div class="ending-stars" aria-hidden="true"></div>
+    </section>
+  </main>
+  <noscript>请开启 JavaScript 体验《星尾归航》。</noscript>
+  <script src="game.js"></script>
+  <script src="chapter-one-3d.bundle.js"></script>
+</body>
+</html>
