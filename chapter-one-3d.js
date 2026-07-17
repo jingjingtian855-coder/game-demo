@@ -151,7 +151,9 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     joystickPointer: null,
     lookPointer: null,
     lookLast: { x: 0, y: 0 },
-    lastRobotHit: 0
+    lastRobotHit: 0,
+    lastScratchTone: 0,
+    pawReachUntil: 0
   };
 
   const colors = {
@@ -247,6 +249,37 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     return texture;
   }
 
+  function makeRadialGlowTexture() {
+    const glowCanvas = document.createElement("canvas");
+    glowCanvas.width = glowCanvas.height = 256;
+    const context = glowCanvas.getContext("2d");
+    const glow = context.createRadialGradient(128, 128, 3, 128, 128, 124);
+    glow.addColorStop(0, "rgba(255,255,235,1)");
+    glow.addColorStop(.08, "rgba(255,219,126,.98)");
+    glow.addColorStop(.28, "rgba(255,139,42,.58)");
+    glow.addColorStop(.62, "rgba(255,61,18,.16)");
+    glow.addColorStop(1, "rgba(255,30,0,0)");
+    context.fillStyle = glow;
+    context.fillRect(0, 0, 256, 256);
+    const texture = new THREE.CanvasTexture(glowCanvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  }
+
+  function makeSoftParticleTexture() {
+    const particleCanvas = document.createElement("canvas");
+    particleCanvas.width = particleCanvas.height = 96;
+    const context = particleCanvas.getContext("2d");
+    const particle = context.createRadialGradient(48, 48, 2, 48, 48, 46);
+    particle.addColorStop(0, "rgba(255,255,255,1)");
+    particle.addColorStop(.18, "rgba(255,255,255,.92)");
+    particle.addColorStop(.52, "rgba(255,255,255,.35)");
+    particle.addColorStop(1, "rgba(255,255,255,0)");
+    context.fillStyle = particle;
+    context.fillRect(0, 0, 96, 96);
+    return new THREE.CanvasTexture(particleCanvas);
+  }
+
   const metalMaterial = material(colors.metal, 0.74, 0.46);
   const darkMetalMaterial = material(colors.ink, 0.82, 0.38);
   const trimMaterial = material(colors.metal2, 0.68, 0.42);
@@ -260,8 +293,15 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     surface.bumpScale = index === 1 ? .018 : .012;
   });
   const furTexture = makeFurTexture();
-  const pawMaterial = new THREE.MeshStandardMaterial({ color: 0xffb26a, map: furTexture, bumpMap: furTexture, bumpScale: .035, metalness: 0, roughness: .88 });
-  const pawStripeMaterial = material(0x42160a, 0.03, 0.96);
+  const pawMaterial = new THREE.MeshPhysicalMaterial({
+    color: 0xb95720, map: furTexture, bumpMap: furTexture, bumpScale: .048,
+    metalness: 0, roughness: .88, sheen: .48, sheenColor: new THREE.Color(0xf2a35c), sheenRoughness: .84
+  });
+  const pawUnderfurMaterial = pawMaterial.clone();
+  pawUnderfurMaterial.color.setHex(0xd48648);
+  pawUnderfurMaterial.bumpScale = .028;
+  const pawPadMaterial = new THREE.MeshPhysicalMaterial({ color: 0x7d3b31, metalness: 0, roughness: .72, sheen: .2, sheenColor: new THREE.Color(0xff9c8d) });
+  const clawMaterial = new THREE.MeshPhysicalMaterial({ color: 0xffefd0, metalness: 0, roughness: .32, clearcoat: .42, clearcoatRoughness: .28, transparent: true, opacity: .88 });
 
   function addBox(size, position, meshMaterial = metalMaterial, parent = scene, rotation = null) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), meshMaterial);
@@ -457,6 +497,24 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   let doorLeft;
   let doorRight;
   let scratchSparks;
+  let scratchSmoke;
+  let scratchGlow;
+  let scratchLight;
+  let memoryBurst;
+  let scratchSparkCursor = 0;
+  let scratchSmokeCursor = 0;
+
+  function makeParticleSystem(count, pointsMaterial) {
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) positions[i * 3 + 1] = -100;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const system = new THREE.Points(geometry, pointsMaterial);
+    system.frustumCulled = false;
+    system.userData.velocities = new Float32Array(count * 3);
+    system.userData.lives = new Float32Array(count);
+    return system;
+  }
 
   function buildCollar() {
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.09, 12, 32), amberMaterial);
@@ -470,6 +528,13 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     const light = new THREE.PointLight(colors.amber, 72, 5, 2);
     collar.add(light);
     scene.add(collar);
+
+    memoryBurst = makeParticleSystem(96, new THREE.PointsMaterial({
+      color: 0xffd27a, size: .075, transparent: true, opacity: 0,
+      depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true
+    }));
+    memoryBurst.position.copy(collar.position);
+    scene.add(memoryBurst);
   }
 
   function buildCableStation() {
@@ -489,12 +554,32 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     const cable = new THREE.Mesh(new THREE.TubeGeometry(curve, 36, 0.075, 8, false), material(0x17202a, 0.45, 0.72));
     scene.add(cable);
 
-    const sparkPositions = new Float32Array(60 * 3);
-    const sparkGeometry = new THREE.BufferGeometry();
-    sparkGeometry.setAttribute("position", new THREE.BufferAttribute(sparkPositions, 3));
-    scratchSparks = new THREE.Points(sparkGeometry, new THREE.PointsMaterial({ color: colors.amber, size: 0.08, transparent: true, opacity: 0 }));
-    scratchSparks.position.set(4.35, 1.4, -23);
-    scene.add(scratchSparks);
+    const softParticleTexture = makeSoftParticleTexture();
+    scratchSparks = makeParticleSystem(84, new THREE.PointsMaterial({
+      color: 0xffad45, size: .038, map: softParticleTexture, alphaTest: .015, transparent: true, opacity: 0,
+      depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true
+    }));
+    scratchSparks.position.set(.17, -.3, -.8);
+    camera.add(scratchSparks);
+
+    scratchSmoke = makeParticleSystem(30, new THREE.PointsMaterial({
+      color: 0x9aa8ad, size: .052, map: softParticleTexture, alphaTest: .01, transparent: true, opacity: 0,
+      depthWrite: false, sizeAttenuation: true
+    }));
+    scratchSmoke.position.copy(scratchSparks.position);
+    camera.add(scratchSmoke);
+
+    scratchGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: makeRadialGlowTexture(), color: 0xffa340, transparent: true, opacity: 0,
+      depthWrite: false, blending: THREE.AdditiveBlending
+    }));
+    scratchGlow.position.copy(scratchSparks.position);
+    scratchGlow.scale.set(.2, .2, .2);
+    camera.add(scratchGlow);
+    scratchLight = new THREE.PointLight(0xff7a2e, 0, 2.2, 2);
+    scratchLight.layers.enable(1);
+    scratchLight.position.copy(scratchSparks.position);
+    camera.add(scratchLight);
   }
 
   function buildDoor() {
@@ -583,31 +668,150 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     for (let i = 0; i < 15; i++) addPawPrint(3.4 - i * 0.22, -24 - i * 1.05, Math.PI);
   }
 
+  function emitMemoryParticles() {
+    const positions = memoryBurst.geometry.attributes.position;
+    const velocities = memoryBurst.userData.velocities;
+    const lives = memoryBurst.userData.lives;
+    memoryBurst.position.copy(collar.position);
+    for (let i = 0; i < lives.length; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const elevation = (Math.random() - .18) * Math.PI * .78;
+      const speed = .55 + Math.random() * 1.85;
+      positions.setXYZ(i, (Math.random() - .5) * .18, (Math.random() - .5) * .12, (Math.random() - .5) * .18);
+      velocities[i * 3] = Math.cos(angle) * Math.cos(elevation) * speed;
+      velocities[i * 3 + 1] = Math.sin(elevation) * speed + .42;
+      velocities[i * 3 + 2] = Math.sin(angle) * Math.cos(elevation) * speed;
+      lives[i] = .85 + Math.random() * 1.15;
+    }
+    positions.needsUpdate = true;
+    memoryBurst.material.opacity = 1;
+  }
+
+  function spawnScratchParticles(amount) {
+    const positions = scratchSparks.geometry.attributes.position;
+    const velocities = scratchSparks.userData.velocities;
+    const lives = scratchSparks.userData.lives;
+    for (let n = 0; n < amount; n++) {
+      const i = scratchSparkCursor++ % lives.length;
+      positions.setXYZ(i, (Math.random() - .5) * .08, (Math.random() - .5) * .1, (Math.random() - .5) * .06);
+      velocities[i * 3] = -(.22 + Math.random() * .82);
+      velocities[i * 3 + 1] = .12 + Math.random() * 1.15;
+      velocities[i * 3 + 2] = (Math.random() - .5) * .72;
+      lives[i] = .18 + Math.random() * .36;
+    }
+    positions.needsUpdate = true;
+  }
+
+  function spawnScratchSmoke(amount) {
+    const positions = scratchSmoke.geometry.attributes.position;
+    const velocities = scratchSmoke.userData.velocities;
+    const lives = scratchSmoke.userData.lives;
+    for (let n = 0; n < amount; n++) {
+      const i = scratchSmokeCursor++ % lives.length;
+      positions.setXYZ(i, (Math.random() - .5) * .12, (Math.random() - .5) * .06, (Math.random() - .5) * .1);
+      velocities[i * 3] = -.12 - Math.random() * .3;
+      velocities[i * 3 + 1] = .22 + Math.random() * .48;
+      velocities[i * 3 + 2] = (Math.random() - .5) * .24;
+      lives[i] = .75 + Math.random() * .72;
+    }
+    positions.needsUpdate = true;
+  }
+
+  function updateParticleSystem(system, dt, verticalForce, drag) {
+    const positions = system.geometry.attributes.position;
+    const velocities = system.userData.velocities;
+    const lives = system.userData.lives;
+    let maxLife = 0;
+    for (let i = 0; i < lives.length; i++) {
+      if (lives[i] <= 0) continue;
+      lives[i] -= dt;
+      if (lives[i] <= 0) {
+        positions.setXYZ(i, 0, -100, 0);
+        continue;
+      }
+      maxLife = Math.max(maxLife, lives[i]);
+      const offset = i * 3;
+      positions.setXYZ(i,
+        positions.getX(i) + velocities[offset] * dt,
+        positions.getY(i) + velocities[offset + 1] * dt,
+        positions.getZ(i) + velocities[offset + 2] * dt
+      );
+      velocities[offset] *= drag;
+      velocities[offset + 1] = velocities[offset + 1] * drag + verticalForce * dt;
+      velocities[offset + 2] *= drag;
+    }
+    positions.needsUpdate = true;
+    return maxLife;
+  }
+
+  function clearParticleSystem(system) {
+    if (!system) return;
+    const positions = system.geometry.attributes.position;
+    system.userData.lives.fill(0);
+    system.userData.velocities.fill(0);
+    for (let i = 0; i < positions.count; i++) positions.setXYZ(i, 0, -100, 0);
+    positions.needsUpdate = true;
+    system.material.opacity = 0;
+  }
+
   function makePaw(side) {
     const group = new THREE.Group();
-    const foreleg = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, 0.34, 9, 22), pawMaterial);
+    const foreleg = new THREE.Mesh(new THREE.CapsuleGeometry(.112, .38, 12, 30), pawMaterial);
     foreleg.rotation.x = Math.PI / 2;
-    foreleg.position.z = -0.06;
+    foreleg.scale.set(1.08, 1, .98);
+    foreleg.position.z = -.035;
     group.add(foreleg);
-    const foot = new THREE.Mesh(new THREE.SphereGeometry(0.15, 30, 20), pawMaterial);
-    foot.scale.set(1.08, 0.7, 1.22);
-    foot.position.set(0, -0.025, -0.27);
+
+    const wrist = new THREE.Mesh(new THREE.SphereGeometry(.132, 32, 22), pawMaterial);
+    wrist.scale.set(1.04, .82, 1.08);
+    wrist.position.set(0, -.012, -.245);
+    group.add(wrist);
+
+    const foot = new THREE.Mesh(new THREE.SphereGeometry(.154, 36, 24), pawMaterial);
+    foot.scale.set(1.12, .68, 1.28);
+    foot.position.set(0, -.038, -.34);
     group.add(foot);
+
+    const underfur = new THREE.Mesh(new THREE.SphereGeometry(.105, 28, 18), pawUnderfurMaterial);
+    underfur.scale.set(.78, .34, .9);
+    underfur.position.set(0, -.105, -.365);
+    group.add(underfur);
+
+    const palmPad = new THREE.Mesh(new THREE.SphereGeometry(.076, 24, 16), pawPadMaterial);
+    palmPad.scale.set(1.18, .36, .86);
+    palmPad.position.set(0, -.126, -.382);
+    group.add(palmPad);
+
+    const claws = [];
+    const toePads = [];
     for (let i = 0; i < 4; i++) {
-      const toe = new THREE.Mesh(new THREE.SphereGeometry(0.055, 20, 12), pawMaterial);
+      const toe = new THREE.Mesh(new THREE.SphereGeometry(.061, 26, 16), i === 0 || i === 3 ? pawUnderfurMaterial : pawMaterial);
       const offset = i - 1.5;
-      toe.scale.set(0.78, 0.58, 1.04);
-      toe.position.set(offset * 0.061, -0.058, -0.383 + Math.abs(offset) * 0.014);
+      const outer = Math.abs(offset) / 1.5;
+      toe.scale.set(.82, .65, 1.16);
+      toe.position.set(offset * .066, -.076 + outer * .008, -.475 + outer * .018);
       group.add(toe);
+
+      const toePad = new THREE.Mesh(new THREE.SphereGeometry(.027, 18, 12), pawPadMaterial);
+      toePad.scale.set(.86, .32, .92);
+      toePad.position.set(offset * .066, -.124 + outer * .006, -.485 + outer * .018);
+      group.add(toePad);
+      toePads.push(toePad);
+
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(.015, .082, 14), clawMaterial);
+      claw.rotation.x = -Math.PI / 2;
+      claw.position.set(offset * .066, -.073 + outer * .007, -.526 + outer * .018);
+      claw.scale.set(1, .46, 1);
+      group.add(claw);
+      claws.push(claw);
     }
-    for (let i = 0; i < 3; i++) {
-      const stripe = new THREE.Mesh(new THREE.TorusGeometry(0.108, 0.015, 8, 30, Math.PI * 1.18), pawStripeMaterial);
-      stripe.rotation.set(Math.PI / 2, 0, side * 0.2);
-      stripe.position.set(0, 0.02, 0.03 + i * 0.105);
-      group.add(stripe);
-    }
-    group.position.set(side * 0.31, -0.31, -0.63);
-    group.rotation.set(-0.06, side * 0.06, side * -0.04);
+
+    group.userData.claws = claws;
+    group.userData.toePads = toePads;
+    group.userData.palmPad = palmPad;
+    group.position.set(side * .31, -.31, -.63);
+    group.rotation.set(-.06, side * .06, side * -.04);
+    group.traverse((child) => child.layers.set(1));
     camera.add(group);
     return group;
   }
@@ -621,6 +825,14 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   buildScentTrail();
   const leftPaw = makePaw(-1);
   const rightPaw = makePaw(1);
+  camera.layers.enable(1);
+  const pawFill = new THREE.HemisphereLight(0xffd7af, 0x421a0e, 1.55);
+  pawFill.layers.set(1);
+  scene.add(pawFill);
+  const pawKey = new THREE.PointLight(0xffaa6a, 3.6, 4, 2);
+  pawKey.position.set(-.25, .35, .2);
+  pawKey.layers.set(1);
+  camera.add(pawKey);
   leftPaw.scale.setScalar(0.56);
   rightPaw.scale.setScalar(0.56);
 
@@ -683,6 +895,8 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   function collectCollar() {
     if (state.stage !== 0) return;
     state.stage = 1;
+    state.pawReachUntil = performance.now() + 950;
+    emitMemoryParticles();
     collar.visible = false;
     player.checkpoint.set(0, 1.13, 4.2);
     updateObjective();
@@ -764,6 +978,8 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     state.doorAmount = 0;
     state.alert = 0;
     state.nearby = null;
+    state.lastScratchTone = 0;
+    state.pawReachUntil = 0;
     player.position.set(0, 1.13, 14);
     player.checkpoint.set(0, 1.13, 14);
     player.yaw = 0;
@@ -774,6 +990,11 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     completeEl.hidden = true;
     progressEl.hidden = true;
     progressFill.style.width = "0%";
+    clearParticleSystem(memoryBurst);
+    clearParticleSystem(scratchSparks);
+    clearParticleSystem(scratchSmoke);
+    scratchGlow.material.opacity = 0;
+    scratchLight.intensity = 0;
     root.classList.remove("scent-on", "hit");
     scentEl.classList.remove("active");
     scentEl.querySelector("span").textContent = "感知关闭";
@@ -851,20 +1072,47 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     if (state.stage === 2 && player.position.z < -45.2) finishChapter();
   }
 
+  function setClawExtension(paw, target) {
+    paw.userData.claws.forEach((claw) => {
+      claw.scale.y = THREE.MathUtils.lerp(claw.scale.y, target, 0.24);
+    });
+  }
+
   function updatePaws(time) {
     const walk = player.moving && player.grounded && state.playing ? Math.sin(player.step) : Math.sin(time * 1.5) * 0.12;
     const bob = player.moving && player.grounded ? Math.abs(Math.sin(player.step * 0.5)) * 0.028 : Math.sin(time * 1.4) * 0.006;
     const jumpLift = player.grounded ? 0 : 0.11;
     leftPaw.position.set(-0.24, -0.45 - bob + jumpLift + walk * 0.018, -0.67 + Math.max(0, walk) * 0.045);
     rightPaw.position.set(0.24, -0.45 - bob + jumpLift - walk * 0.018, -0.67 + Math.max(0, -walk) * 0.045);
+    leftPaw.rotation.x = -0.03 + Math.max(0, walk) * 0.025;
+    rightPaw.rotation.x = -0.03 + Math.max(0, -walk) * 0.025;
+    leftPaw.rotation.y = -0.025;
+    rightPaw.rotation.y = 0.025;
     leftPaw.rotation.z = -0.04 + walk * 0.035;
-    if (state.holdingInteract && state.nearby === "cable") {
-      rightPaw.position.x = 0.18;
-      rightPaw.position.y = -0.18 + Math.sin(time * 26) * 0.045;
-      rightPaw.position.z = -0.48;
-      rightPaw.rotation.z = -0.28 + Math.sin(time * 26) * 0.08;
+    rightPaw.rotation.z = 0.04 - walk * 0.035;
+
+    const reachRemaining = state.pawReachUntil - performance.now();
+    if (reachRemaining > 0) {
+      const reach = Math.sin((1 - reachRemaining / 950) * Math.PI);
+      rightPaw.position.x -= reach * 0.05;
+      rightPaw.position.y += reach * 0.2;
+      rightPaw.position.z += reach * 0.16;
+      rightPaw.rotation.x += reach * 0.22;
+      rightPaw.rotation.z -= reach * 0.12;
+    }
+
+    const scratching = state.holdingInteract && state.nearby === "cable" && state.stage === 1;
+    if (scratching) {
+      const stroke = (Math.sin(time * 29) + 1) * 0.5;
+      rightPaw.position.set(0.17, -0.27 + stroke * 0.085, -0.5 - stroke * 0.07);
+      rightPaw.rotation.x = 0.18 + stroke * 0.15;
+      rightPaw.rotation.y = 0.09;
+      rightPaw.rotation.z = -0.31 + stroke * 0.1;
+      setClawExtension(rightPaw, 1.28);
+      setClawExtension(leftPaw, 0.45);
     } else {
-      rightPaw.rotation.z = 0.04 - walk * 0.035;
+      setClawExtension(rightPaw, 0.46);
+      setClawExtension(leftPaw, 0.46);
     }
   }
 
@@ -904,6 +1152,8 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   }
 
   function updateWorld(dt, time) {
+    const memoryLife = updateParticleSystem(memoryBurst, dt, -0.18, 0.982);
+    memoryBurst.material.opacity = memoryLife > 0 ? Math.min(0.95, memoryLife * 1.3) : 0;
     if (collar.visible) {
       collar.rotation.y += dt * 0.85;
       collar.position.y = 0.35 + Math.sin(time * 2.2) * 0.065;
@@ -920,26 +1170,43 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     doorLeft.position.x = -2.4 - state.doorAmount * 4.4;
     doorRight.position.x = 2.4 + state.doorAmount * 4.4;
 
-    if (state.holdingInteract && state.nearby === "cable" && state.stage === 1 && pauseScreen.hidden) {
+    const scratching = state.holdingInteract && state.nearby === "cable" && state.stage === 1 && pauseScreen.hidden;
+    if (scratching) {
       state.scratch = (performance.now() - state.scratchStartedAt) / 1000;
       progressEl.hidden = false;
       progressFill.style.width = `${Math.min(100, state.scratch / 1.45 * 100)}%`;
-      const positions = scratchSparks.geometry.attributes.position;
-      for (let i = 0; i < positions.count; i++) positions.setXYZ(i, (Math.random() - .5) * .9, (Math.random() - .5) * .9, (Math.random() - .5) * .5);
-      positions.needsUpdate = true;
-      scratchSparks.material.opacity = 0.9;
+      spawnScratchParticles(Math.max(2, Math.ceil(dt * 145)));
+      if (Math.random() < dt * 13) spawnScratchSmoke(1);
+      scratchGlow.material.opacity = 0.42 + Math.random() * 0.26;
+      const glowScale = 0.18 + Math.random() * 0.07;
+      scratchGlow.scale.set(glowScale, glowScale, glowScale);
+      scratchLight.intensity = 5 + Math.random() * 7;
+      if (performance.now() - state.lastScratchTone > 86) {
+        state.lastScratchTone = performance.now();
+        tone(82 + Math.random() * 44, 0.075, "sawtooth", 0.011);
+        if (Math.random() > 0.45) tone(890 + Math.random() * 430, 0.038, "triangle", 0.006);
+      }
       if (state.scratch >= 1.45) finishCable();
     } else {
-      scratchSparks.material.opacity = Math.max(0, scratchSparks.material.opacity - dt * 4);
+      scratchGlow.material.opacity = THREE.MathUtils.lerp(scratchGlow.material.opacity, 0, Math.min(1, dt * 12));
+      scratchLight.intensity = THREE.MathUtils.lerp(scratchLight.intensity, 0, Math.min(1, dt * 14));
     }
+    const sparkLife = updateParticleSystem(scratchSparks, dt, -6.2, 0.93);
+    scratchSparks.material.opacity = sparkLife > 0 ? 0.9 : 0;
+    const smokeLife = updateParticleSystem(scratchSmoke, dt, 0.2, 0.985);
+    scratchSmoke.material.opacity = smokeLife > 0 ? Math.min(0.3, smokeLife * 0.24) : 0;
     updateRobot(dt, time);
   }
 
   function updateCamera(time) {
     const bob = player.moving && player.grounded ? Math.sin(player.step) * 0.025 : Math.sin(time * 1.4) * 0.006;
-    camera.position.set(player.position.x, player.position.y + bob, player.position.z);
-    camera.rotation.y = player.yaw;
-    camera.rotation.x = player.pitch;
+    const scratching = state.holdingInteract && state.nearby === "cable" && state.stage === 1;
+    const shakeX = scratching ? Math.sin(time * 91) * 0.0045 : 0;
+    const shakeY = scratching ? Math.cos(time * 83) * 0.003 : 0;
+    camera.position.set(player.position.x + shakeX, player.position.y + bob + shakeY, player.position.z);
+    camera.rotation.y = player.yaw + (scratching ? Math.sin(time * 77) * 0.0018 : 0);
+    camera.rotation.x = player.pitch + (scratching ? Math.cos(time * 69) * 0.0012 : 0);
+    camera.rotation.z = scratching ? Math.sin(time * 87) * 0.0022 : 0;
   }
 
   function animate() {

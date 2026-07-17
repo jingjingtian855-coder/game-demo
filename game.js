@@ -49,11 +49,31 @@
     }
   ];
 
-  const textPrologueLines = [
-    "遥远未来，人类沿“折跃航道”往返群星，运送货物与记忆信号。",
-    "一次普通货运任务中，飞船撞上从未被记录的时空乱流，船体被瞬间撕裂。",
-    "一只橘色小猫随救生休眠舱漂向陌生空间；身体安然无恙，记忆却散落在星际遗迹之中。",
-    "它忘了自己的名字，也忘了等待它的人；项圈、逗猫棒、猫条与手套，将成为找回过去的记忆锚点。"
+  const textProloguePages = [
+    [
+      "星际历二七四九年，人类借助“折跃航道”往返群星。",
+      "橘猫米粒跟随主人登上一艘远航货船，第一次离开地球，前往遥远星区的新家。"
+    ],
+    [
+      "一次普通运输途中，飞船撞上了从未被记录的时空乱流。",
+      "船体在折跃中被撕裂，货物、生活用品与乘员的记忆信号被抛向不同空间。"
+    ],
+    [
+      "最后一刻，主人将米粒送进救生休眠舱，自己却消失在断裂的船舱另一端。",
+      "休眠系统保护了它的身体，却没能保存那些关于名字、陪伴与家的记忆。"
+    ],
+    [
+      "当舱门再次开启，米粒不记得自己，也不记得那个一直呼唤它的人。",
+      "只有那些散落的物品，还保留着熟悉的声音与气味。",
+      "每一次触碰，都会让一段失落的过去重新亮起——也让回家的坐标更近一步。"
+    ]
+  ];
+
+  const textPrologueBackgrounds = [
+    "assets/images/prologue/route-city.png",
+    "assets/images/prologue/cargo-voyage.png",
+    "assets/images/prologue/warp-route.png",
+    "assets/images/prologue/lost-home.png"
   ];
 
   const scenes = [
@@ -112,7 +132,7 @@
   const state = {
     started: false, scene: 0, x: 11, direction: 1, moving: 0, jumping: false, sensing: false,
     paused: false, locked: false, muted: false, nearby: null, lastTime: performance.now(), lastStep: 0,
-    intro: 0, textPrologueIndex: 0, textPrologueTimer: null, subtitleTimer: null, senseTimer: null, puzzle: [1, 3, 2], cinematicPhase: "idle",
+    intro: 0, textProloguePage: 0, textPrologueSentence: 0, textPrologueTimer: null, subtitleTimer: null, senseTimer: null, puzzle: [1, 3, 2], cinematicPhase: "idle",
     orbHits: 0, stability: 62, holdingStability: false, qteLast: 0, qteRaf: 0, cinematicFinished: false,
     flags: { heardCollar: false, scratchedCable: false, modules: new Set(), robotRepaired: false, puzzleSolved: false }
   };
@@ -146,6 +166,20 @@
     error() { this.tone(145, .22, "sawtooth", .04); }
     step() { this.tone(105 + Math.random() * 18, .045, "triangle", .025); }
     meow() { this.tone(610, .18, "sine", .06); this.tone(430, .32, "sine", .055, .13); }
+    ui(kind = "tap") {
+      this.start();
+      if (!this.ctx || state.muted) return;
+      const voices = {
+        tap: [430, 645, .052, .025],
+        soft: [270, 405, .07, .022],
+        confirm: [520, 780, .1, .034],
+        back: [330, 220, .09, .028],
+        hover: [760, 920, .032, .009]
+      };
+      const [first, second, duration, volume] = voices[kind] || voices.tap;
+      this.tone(first, duration, "triangle", volume);
+      this.tone(second, duration * .9, "sine", volume * .62, .022);
+    }
     setMuted(muted) { if (this.master) this.master.gain.value = muted ? 0 : .3; }
   }
   const audio = new AudioEngine();
@@ -405,46 +439,83 @@
     el.cinematicPrompt.hidden = true; el.cinematic.classList.remove("awaiting");
   }
 
-  function renderTextPrologueLine() {
+  const textPrologueTiming = { sentence: 2500, hold: 2800, fade: 1000 };
+
+  function updateTextPrologueProgress() {
+    while (el.textPrologueProgress.children.length < textProloguePages.length) el.textPrologueProgress.appendChild(document.createElement("i"));
+    [...el.textPrologueProgress.children].forEach((dot, index) => {
+      dot.classList.toggle("is-active", index === state.textProloguePage);
+      dot.classList.toggle("is-done", index < state.textProloguePage);
+    });
+  }
+
+  function scheduleTextPrologue() {
+    clearTimeout(state.textPrologueTimer);
+    const page = textProloguePages[state.textProloguePage];
+    if (state.textPrologueSentence < page.length - 1) {
+      state.textPrologueTimer = setTimeout(() => {
+        state.textPrologueSentence++;
+        el.textPrologueLine.children[state.textPrologueSentence]?.classList.add("is-visible");
+        scheduleTextPrologue();
+      }, textPrologueTiming.sentence);
+      return;
+    }
+    state.textPrologueTimer = setTimeout(advanceTextProloguePage, textPrologueTiming.hold);
+  }
+
+  function renderTextProloguePage() {
     clearTimeout(state.textPrologueTimer);
     const copy = el.textPrologueLine.parentElement;
-    if (!el.textPrologueLine.children.length) {
-      el.textPrologueLine.replaceChildren(...textPrologueLines.map(text => {
-        const sentence = document.createElement("span");
-        sentence.textContent = text;
-        return sentence;
-      }));
-    }
+    const page = textProloguePages[state.textProloguePage];
+    el.textPrologueLine.replaceChildren(...page.map(text => {
+      const sentence = document.createElement("span");
+      sentence.textContent = text;
+      return sentence;
+    }));
+    state.textPrologueSentence = 0;
+    el.textPrologue.style.setProperty("--prologue-bg", `url("${textPrologueBackgrounds[state.textProloguePage]}")`);
     el.textPrologueKicker.textContent = "";
-    [...el.textPrologueLine.children].forEach((sentence, index) => sentence.classList.toggle("is-visible", index <= state.textPrologueIndex));
-    [...el.textPrologueProgress.children].forEach((dot, index) => dot.classList.toggle("is-active", index <= state.textPrologueIndex));
-    copy.classList.remove("is-leaving");
-    copy.classList.add("is-visible");
+    updateTextPrologueProgress();
+    copy.classList.remove("is-leaving", "is-page-enter");
+    void copy.offsetWidth;
+    copy.classList.add("is-visible", "is-page-enter");
+    requestAnimationFrame(() => el.textPrologueLine.children[0]?.classList.add("is-visible"));
+    scheduleTextPrologue();
+  }
+
+  function advanceTextProloguePage() {
+    clearTimeout(state.textPrologueTimer);
+    const copy = el.textPrologueLine.parentElement;
+    copy.classList.add("is-leaving");
     state.textPrologueTimer = setTimeout(() => {
-      if (state.textPrologueIndex >= textPrologueLines.length - 1) {
-        copy.classList.add("is-leaving");
-        state.textPrologueTimer = setTimeout(finishTextPrologue, 1100);
-      } else {
-        state.textPrologueIndex++;
-        renderTextPrologueLine();
+      if (state.textProloguePage >= textProloguePages.length - 1) finishTextPrologue();
+      else {
+        state.textProloguePage++;
+        renderTextProloguePage();
       }
-    }, state.textPrologueIndex >= textPrologueLines.length - 1 ? 2800 : 1900);
+    }, textPrologueTiming.fade);
   }
 
   function startTextPrologue() {
     audio.start();
-    state.textPrologueIndex = 0;
+    state.textProloguePage = 0;
+    state.textPrologueSentence = 0;
     el.textPrologueLine.replaceChildren();
     el.title.classList.remove("is-active");
     el.textPrologue.classList.add("is-active");
-    renderTextPrologueLine();
+    renderTextProloguePage();
   }
 
   function advanceTextPrologue() {
     clearTimeout(state.textPrologueTimer);
-    if (state.textPrologueIndex >= textPrologueLines.length - 1) { finishTextPrologue(); return; }
-    state.textPrologueIndex++;
-    renderTextPrologueLine();
+    const page = textProloguePages[state.textProloguePage];
+    if (state.textPrologueSentence < page.length - 1) {
+      state.textPrologueSentence++;
+      el.textPrologueLine.children[state.textPrologueSentence]?.classList.add("is-visible");
+      scheduleTextPrologue();
+      return;
+    }
+    advanceTextProloguePage();
   }
 
   function finishTextPrologue() {
@@ -455,6 +526,7 @@
 
   function startCinematic() {
     state.cinematicFinished = false; state.cinematicPhase = "opening"; state.orbHits = 0; state.stability = 62; state.holdingStability = false;
+    el.cinematic.dataset.phase = "opening";
     el.title.classList.remove("is-active"); el.cinematic.classList.add("is-active");
     el.wakeHotspot.hidden = true; el.orbHotspot.hidden = true; el.turbulenceQte.hidden = true; el.cinematicResult.hidden = true;
     el.cinematicProgress.style.width = "0%"; hideCinematicPrompt();
@@ -467,10 +539,10 @@
     const video = el.prologueVideo;
     if (Number.isFinite(video.duration) && video.duration > 0) el.cinematicProgress.style.width = `${Math.min(100, video.currentTime / video.duration * 100)}%`;
     if (state.cinematicPhase === "opening" && video.currentTime >= 2.82) {
-      video.pause(); state.cinematicPhase = "wake"; setCinematicPrompt("第一步 · 苏醒", "轻触舱壁，唤醒小猫", "休眠舱外传来不属于引擎的震动"); el.wakeHotspot.hidden = false;
+      video.pause(); state.cinematicPhase = "wake"; el.cinematic.dataset.phase = "wake"; setCinematicPrompt("第一步 · 苏醒", "轻触舱壁，唤醒小猫", "休眠舱外传来不属于引擎的震动"); el.wakeHotspot.hidden = false;
     } else if (state.cinematicPhase === "afterWake" && video.currentTime >= 5.08) {
-      video.pause(); state.cinematicPhase = "chase"; state.orbHits = 0; el.orbCounter.textContent = "0 / 3";
-      setCinematicPrompt("第二步 · 追逐", "连续触碰漂浮光点", "身体仍记得如何追逐，记忆却一片空白"); el.orbHotspot.hidden = false;
+      video.pause(); state.cinematicPhase = "chase"; el.cinematic.dataset.phase = "chase"; state.orbHits = 0; el.orbCounter.textContent = "0 / 3";
+      setCinematicPrompt("第二步 · 追逐", "连续触碰漂浮光球", "身体仍记得如何追逐，记忆却一片空白"); el.orbHotspot.hidden = false;
     } else if (state.cinematicPhase === "afterChase" && video.currentTime >= 7.55) {
       beginTurbulence();
     } else if (state.cinematicPhase === "turbulence" && video.currentTime >= 13.58) {
@@ -480,8 +552,8 @@
 
   function wakeCat() {
     if (state.cinematicPhase !== "wake") return;
-    el.wakeHotspot.classList.add("hit"); cinematicFlash(); hideCinematicPrompt(); state.cinematicPhase = "afterWake";
-    setTimeout(() => { el.wakeHotspot.hidden = true; el.wakeHotspot.classList.remove("hit"); el.prologueVideo.play(); }, 260);
+    el.wakeHotspot.classList.add("hit"); hideCinematicPrompt(); state.cinematicPhase = "afterWake"; el.cinematic.dataset.phase = "after-wake";
+    setTimeout(() => { el.wakeHotspot.hidden = true; el.wakeHotspot.classList.remove("hit"); el.prologueVideo.play(); }, 720);
   }
 
   function chaseOrb() {
@@ -493,7 +565,7 @@
       if (state.orbHits < 3) {
         const [left,top] = positions[state.orbHits]; el.orbHotspot.style.left = `${left}%`; el.orbHotspot.style.top = `${top}%`;
       } else {
-        el.orbHotspot.hidden = true; hideCinematicPrompt(); cinematicFlash(); state.cinematicPhase = "afterChase"; el.prologueVideo.play();
+        el.orbHotspot.hidden = true; hideCinematicPrompt(); cinematicFlash(); state.cinematicPhase = "afterChase"; el.cinematic.dataset.phase = "after-chase"; el.prologueVideo.play();
       }
     }, 280);
   }
@@ -505,6 +577,7 @@
 
   function beginTurbulence() {
     state.cinematicPhase = "turbulence"; state.stability = 62; state.holdingStability = false; state.qteLast = performance.now();
+    el.cinematic.dataset.phase = "turbulence";
     el.turbulenceQte.hidden = false; el.stabilityButton.classList.remove("retry");
     el.stabilityButton.innerHTML = "<span>按住抵抗乱流</span><small>长按空格</small>";
     setCinematicPrompt("第三步 · 稳定", "保持休眠舱稳定", "长按按钮或空格，抵抗不断增强的乱流");
@@ -584,7 +657,33 @@
     button.addEventListener("pointerdown", down); button.addEventListener("pointerup", up); button.addEventListener("pointercancel", up); button.addEventListener("pointerleave", up);
   }
 
+  function bindButtonAudio() {
+    const soundKind = button => {
+      if (button.matches("#startButton,#chapter3dEnter,#storyNext,#puzzleClose,#chapter3dTouchInteract,.primary-button")) return "confirm";
+      if (button.matches("#pauseButton,#resumeButton,#soundButton,#settingsButton,#skipCinematic,#textPrologueSkip")) return "soft";
+      if (button.matches("#returnTitleButton,#restartButton,#replayButton,#chapter3dReplay")) return "back";
+      return "tap";
+    };
+    document.addEventListener("pointerdown", event => {
+      const button = event.target.closest?.("button");
+      if (!button || button.disabled) return;
+      audio.ui(soundKind(button));
+    }, true);
+    document.addEventListener("keydown", event => {
+      if (event.repeat || !["Enter", " "].includes(event.key)) return;
+      const button = event.target.closest?.("button");
+      if (button && !button.disabled) audio.ui(soundKind(button));
+    }, true);
+    document.addEventListener("pointerover", event => {
+      if (!audio.ctx || state.muted || !matchMedia("(pointer:fine)").matches) return;
+      const button = event.target.closest?.("button");
+      if (!button || button.disabled || button.contains(event.relatedTarget)) return;
+      audio.ui("hover");
+    }, true);
+  }
+
   function bindEvents() {
+    bindButtonAudio();
     el.start.addEventListener("click", startTextPrologue); el.storyNext.addEventListener("click", nextIntro);
     el.textPrologueSkip.addEventListener("click", finishTextPrologue);
     el.prologueVideo.addEventListener("timeupdate", onCinematicTime); el.prologueVideo.addEventListener("ended", finishCinematic);
@@ -598,7 +697,7 @@
     el.restart.addEventListener("click", () => { el.pauseScreen.hidden = true; resetGame(false); });
     el.settings.addEventListener("click", () => { el.sound.click(); el.settings.setAttribute("aria-label", state.muted ? "设置：声音已关闭" : "设置：声音已开启"); });
     el.returnTitle.addEventListener("click", returnToTitle);
-    el.sound.addEventListener("click", () => { state.muted = !state.muted; el.sound.classList.toggle("muted", state.muted); el.sound.setAttribute("aria-label", state.muted ? "开启声音" : "关闭声音"); audio.setMuted(state.muted); if (state.muted && "speechSynthesis" in window) speechSynthesis.cancel(); });
+    el.sound.addEventListener("click", () => { state.muted = !state.muted; el.sound.classList.toggle("muted", state.muted); el.sound.setAttribute("aria-label", state.muted ? "开启声音" : "关闭声音"); audio.setMuted(state.muted); if (!state.muted) audio.ui("confirm"); if (state.muted && "speechSynthesis" in window) speechSynthesis.cancel(); });
     el.puzzleClose.addEventListener("click", () => { el.puzzle.hidden = true; state.paused = false; });
     $$(".signal-ring").forEach((ring, i) => ring.addEventListener("click", () => { if (state.flags.puzzleSolved) return; state.puzzle[i] = (state.puzzle[i] + 1) % 4; audio.tone(240 + i*100, .16, "triangle", .04); updatePuzzle(); }));
     el.replayFinal.addEventListener("click", () => resetGame(true)); el.replay.addEventListener("click", () => resetGame(false));
@@ -636,6 +735,7 @@
 
   function startLoading() {
     const sources = [
+      ...textPrologueBackgrounds,
       "assets/images/title-cat-3d.png",
       "assets/images/cargo-bay-clean.png",
       "assets/images/tundra-seven-clean.png",
