@@ -50,6 +50,12 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
     <section id="later3dComplete" class="later3d-complete" hidden>
       <div><small id="later3dCompleteKicker"></small><h2 id="later3dCompleteTitle"></h2><p id="later3dCompleteText"></p><button id="later3dNext" type="button"></button><button id="later3dReplay" class="later3d-replay" type="button">重新游玩本章</button></div>
     </section>
+    <section class="chapter3d-bridge" id="later3dBridge" aria-label="第二章到第三章过场" hidden>
+      <video id="later3dBridgeVideo" preload="auto" playsinline><source src="assets/video/chapter-bridge/chapter-2-to-3.mp4" type="video/mp4" /></video>
+      <div class="chapter3d-bridge-shade" aria-hidden="true"></div>
+      <header class="chapter3d-bridge-chrome"><div class="chapter3d-bridge-progress"><i id="later3dBridgeProgress"></i></div><button id="later3dBridgeSkip" type="button">跳过过场</button></header>
+      <div class="chapter3d-bridge-launch" id="later3dBridgeLaunch" hidden><span>CHAPTER 03 / ZERO POINT TOWER</span><h2>出发</h2><p>光门另一端，零点塔正在等待米粒。</p><button id="later3dBridgeStart" type="button">进入第三章</button></div>
+    </section>
     <div class="later3d-touch" aria-label="触屏游戏控制"><div id="later3dStick" class="later3d-stick"><i></i></div><div class="later3d-actions"><button id="later3dSense" type="button">感知</button><button id="later3dJump" type="button">跳</button><button id="later3dInteract" type="button">互动</button></div></div>
     <div id="later3dLookzone" class="later3d-lookzone" aria-hidden="true"></div>
     <div class="later3d-rotate"><span>请旋转设备至横屏游玩</span></div>
@@ -88,6 +94,12 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
   const completeText = $("#later3dCompleteText");
   const nextButton = $("#later3dNext");
   const replayButton = $("#later3dReplay");
+  const bridgeEl = $("#later3dBridge");
+  const bridgeVideo = $("#later3dBridgeVideo");
+  const bridgeProgress = $("#later3dBridgeProgress");
+  const bridgeSkipButton = $("#later3dBridgeSkip");
+  const bridgeLaunch = $("#later3dBridgeLaunch");
+  const bridgeStartButton = $("#later3dBridgeStart");
   const stick = $("#later3dStick");
   const stickKnob = stick.querySelector("i");
   const lookzone = $("#later3dLookzone");
@@ -140,6 +152,11 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
   let timeGhosts = [];
   let gloveObject = null;
   let routeBeam = null;
+  let gatheringStars = [];
+  let coordinatePanel = null;
+  let coordinateLight = null;
+  let coordinateOrb = null;
+  let chapterExitGate = null;
 
   const player = {
     position: new THREE.Vector3(0, 1.13, 14), checkpoint: new THREE.Vector3(0, 1.13, 14), yaw: 0, pitch: 0,
@@ -148,7 +165,8 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
   const state = {
     active: false, playing: false, chapter: 0, complete: false, memoryOpen: false, stage: 0, puzzleTurns: 0,
     scent: false, nearby: null, alert: 0, gloveHold: 0, holdingGlove: false, touchMove: { x: 0, y: 0 }, stickPointer: null, lookPointer: null,
-    lookLast: { x: 0, y: 0 }, lastAlertReset: 0, pawReachUntil: 0, twoD: false, runner: false
+    lookLast: { x: 0, y: 0 }, lastAlertReset: 0, pawReachUntil: 0, twoD: false, runner: false,
+    zeroProgress: 0, coordinateLocked: false, exitGateOpen: false
   };
   const port = {
     x: 6, y: 7, vx: 0, vy: 0, grounded: true, checkpoint: { x: 6, y: 7 },
@@ -246,7 +264,7 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
   const leftPaw=buildPaw(-1), rightPaw=buildPaw(1); leftPaw.scale.setScalar(.56);rightPaw.scale.setScalar(.56); camera.layers.enable(1);
   const pawLight=new THREE.HemisphereLight(0xffddb4,0x4a190b,1.45);pawLight.layers.set(1);scene.add(pawLight);const pawKey=new THREE.PointLight(0xffad6c,3.2,4,2);pawKey.layers.set(1);pawKey.position.set(-.2,.3,.1);camera.add(pawKey);
 
-  function clearWorld() { while(world.children.length) world.remove(world.children[0]); colliders.length=0;platforms.length=0;scanners.length=0;guides.length=0;scentMarks.length=0;animated.length=0;waterLines=[];gardenVines=[];zeroAnchors=[];falseEchoes=[];timeGhosts=[];solarMirror=null;gloveObject=null;routeBeam=null;activeTarget=null;targetLight=null; }
+  function clearWorld() { while(world.children.length) world.remove(world.children[0]); colliders.length=0;platforms.length=0;scanners.length=0;guides.length=0;scentMarks.length=0;animated.length=0;waterLines=[];gardenVines=[];zeroAnchors=[];falseEchoes=[];timeGhosts=[];gatheringStars=[];solarMirror=null;gloveObject=null;routeBeam=null;coordinatePanel=null;coordinateLight=null;coordinateOrb=null;chapterExitGate=null;activeTarget=null;targetLight=null; }
   function addBackground(stars = 600, tint = 0x243f70, skyColor = 0xbfeaff, upperColor = 0x9ccfff) { scene.background=new THREE.Color(0x020813);scene.fog=new THREE.FogExp2(tint,.022);const sky=new THREE.BufferGeometry();const pos=[];for(let i=0;i<stars;i++)pos.push((Math.random()-.5)*80,Math.random()*34-3,-48-Math.random()*100);sky.setAttribute("position",new THREE.Float32BufferAttribute(pos,3));world.add(new THREE.Points(sky,new THREE.PointsMaterial({color:skyColor,size:.07,transparent:true,opacity:.86,depthWrite:false})));const hemi=new THREE.HemisphereLight(upperColor,0x080410,2.25);world.add(hemi);const fill=new THREE.AmbientLight(upperColor,.75);world.add(fill);if(sceneCameraLamp)camera.remove(sceneCameraLamp);sceneCameraLamp=new THREE.PointLight(upperColor,15,12,2);camera.add(sceneCameraLamp); }
   function loadProp(url, position, height, rotationY = 0) { loader.load(url, gltf=>{ if(!state.active)return;const model=gltf.scene;model.traverse(node=>{if(!node.isMesh)return;node.material=Array.isArray(node.material)?node.material.map(mat=>mat.clone()):node.material.clone();node.material.metalness=Math.min(.85,node.material.metalness??.6);node.material.roughness=Math.max(.35,node.material.roughness??.5);if(node.material.map)node.material.map.colorSpace=THREE.SRGBColorSpace;});const box=new THREE.Box3().setFromObject(model), size=box.getSize(new THREE.Vector3()), center=box.getCenter(new THREE.Vector3());model.position.set(-center.x,-box.min.y,-center.z);const holder=new THREE.Group();holder.position.set(...position);holder.rotation.y=rotationY;holder.scale.setScalar(height/Math.max(.01,size.y));holder.add(model);world.add(holder);},undefined,()=>{}); }
   function makeCargoCrate(x,z,w,d,h,color=metal,platform=false) { const group=new THREE.Group();group.position.set(x,0,z);world.add(group);addBox([w,h,d],[0,h/2,0],color,group);addBox([w+.04,.12,d+.04],[0,h*.67,0],dark,group);for(const px of [-1,1])for(const pz of [-1,1]){const pin=new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,h*.72,8),trim);pin.position.set(px*(w*.39),h*.5,pz*(d*.39));group.add(pin);} if(platform)addPlatform(x,z,w,d,h);else addCollider(x,z,w+.15,d+.15);return group; }
@@ -283,6 +301,22 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
       lamp.position.set(side * .92, height + .27, .05); group.add(lamp);
     }
     runner.obstacles.push({ lane, z, height });
+  }
+  function makeChapterExitGate() {
+    const group = new THREE.Group(); group.position.set(0, 0, -56.5); world.add(group);
+    const frameMaterial = material(0xffffff, .1, .24, PORT.amber, 4.2);
+    const fieldMaterial = new THREE.MeshBasicMaterial({ color: 0x8df7ff, transparent: true, opacity: .2, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+    addBox([.22, 4.5, .24], [-4.65, 2.25, 0], frameMaterial, group); addBox([.22, 4.5, .24], [4.65, 2.25, 0], frameMaterial, group);
+    const arch = new THREE.Mesh(new THREE.TorusGeometry(4.65, .1, 10, 72, Math.PI), frameMaterial); arch.position.y = 2.25; group.add(arch);
+    const field = new THREE.Mesh(new THREE.PlaneGeometry(9.1, 4.45), fieldMaterial); field.position.y = 2.22; group.add(field);
+    const halo = new THREE.Mesh(new THREE.RingGeometry(2.3, 2.5, 64), new THREE.MeshBasicMaterial({ color: PORT.violet, transparent: true, opacity: .48, depthWrite: false, blending: THREE.AdditiveBlending })); halo.position.set(0, 2.25, .03); group.add(halo);
+    const light = addArcLight([0, 2.25, -56.5], PORT.amber, 86, 18);
+    group.userData = { fieldMaterial, halo, light, baseY: group.position.y }; animated.push({ type: "exitGate", group }); return group;
+  }
+  function openChapterExitGate() {
+    if (state.exitGateOpen || state.chapter !== 2) return;
+    state.exitGateOpen = true; activeTarget = null; if (targetLight) targetLight.intensity = 0; chapterExitGate = makeChapterExitGate();
+    player.checkpoint.copy(player.position); updateObjective(); showToast("前方出现了一道发光的门，穿过去。", 3200); tone(520, .22, "sine", .045);
   }
   function buildRunnerWorld() {
     root.dataset.chapter = "2";
@@ -349,6 +383,7 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
     if (activeTarget && player.position.z < activeTarget.position.z - 1.9 && now - runner.lastHit > 900) {
       runner.lastHit = now; resetCheckpoint("光羽掠过了前方跑道，已返回最近检查点。"); return;
     }
+    if (state.exitGateOpen && chapterExitGate && player.position.z < chapterExitGate.position.z + .2) { finishChapter(); return; }
     if (player.position.z < runner.endZ && state.stage < 3 && now - runner.lastHit > 900) {
       runner.lastHit = now; resetCheckpoint("航道仍在延伸，先追上前方的光羽。");
     }
@@ -388,7 +423,7 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
       updateObjective(); renderPort2D();
       return;
     }
-    renderPort2D(); updateObjective(); showMemory();
+    renderPort2D(); updateObjective(); finishChapter();
   }
   function updatePort2D(dt) {
     if (!state.playing || state.complete || !pauseScreen.hidden) return;
@@ -470,7 +505,7 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
     const arm=new THREE.Mesh(new THREE.BoxGeometry(1.15,.1,.1),mat);arm.position.set(.45,1.64,.18);arm.rotation.z=-.36;group.add(arm);
     const hand=new THREE.Mesh(new THREE.SphereGeometry(.12,14,10),zeroRed);hand.position.set(1.02,1.44,.22);group.add(hand);
     const warning=new THREE.Mesh(new THREE.TorusGeometry(.92,.025,8,42),new THREE.MeshBasicMaterial({color:ZERO.red,transparent:true,opacity:.5,depthWrite:false}));warning.rotation.x=Math.PI/2;warning.position.y=.08;group.add(warning);
-    addSign(label,[position[0],2.72,position[2]],1.65,"#ff4268",rotation);
+    if(label)addSign(label,[position[0],2.72,position[2]],1.65,"#ff4268",rotation);
     falseEchoes.push(group);animated.push({type:"falseOwner",group,phase:position[0]-position[2]});
     return group;
   }
@@ -482,7 +517,7 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
     if(kind==="feather"){const feather=new THREE.Mesh(new THREE.PlaneGeometry(.48,1.12),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.78,side:THREE.DoubleSide}));feather.position.y=.56;feather.rotation.z=-.45;group.add(feather);}
     if(kind==="treat"){addBox([.72,.12,.4],[0,.22,0],zeroAmber,group,[0,.2,.08]);}
     if(kind==="wreck"){addBox([1.3,.18,.7],[0,.3,0],portDark,group,[.08,.35,-.1]);addBox([.78,.06,.72],[.18,.52,.03],zeroCyan,group,[.2,.35,0]);}
-    addSign(label,[position[0],position[1]+1.05,position[2]],2.05,"#fff7df");
+    if(label)addSign(label,[position[0],position[1]+1.05,position[2]],2.05,"#fff7df");
     const light=addArcLight(position,color,40,7);
     const anchor={kind,group,position:group.position,light};zeroAnchors.push(anchor);animated.push({type:"zeroAnchor",group,phase:zeroAnchors.length});
     return anchor;
@@ -497,6 +532,40 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
     for(let i=0;i<4;i++){const ring=new THREE.Mesh(new THREE.TorusGeometry(1.15+i*.42,.022,8,64),new THREE.MeshBasicMaterial({color:i%2?ZERO.warm:ZERO.cyan,transparent:true,opacity:.25,depthWrite:false}));ring.rotation.set(Math.PI/2+i*.2,i*.32,0);group.add(ring);animated.push({type:"gloveRing",group:ring,phase:i});}
     animated.push({type:"zeroGlove",group,phase:0});return group;
   }
+  function coordinateTexture() {
+    const canvas=document.createElement("canvas");canvas.width=1024;canvas.height=512;const ctx=canvas.getContext("2d");
+    const gradient=ctx.createLinearGradient(0,0,1024,512);gradient.addColorStop(0,"rgba(24,16,9,.64)");gradient.addColorStop(1,"rgba(255,243,205,.14)");ctx.fillStyle=gradient;ctx.fillRect(0,0,1024,512);
+    ctx.strokeStyle="rgba(255,247,223,.74)";ctx.lineWidth=10;ctx.strokeRect(28,28,968,456);
+    ctx.fillStyle="#fff7df";ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="800 72px Microsoft YaHei";ctx.fillText("林澈坐标",512,126);
+    ctx.font="700 52px Consolas, Microsoft YaHei";ctx.fillStyle="#7ff5ff";ctx.fillText("LINCHE / SIGNAL LOCKED",512,228);
+    ctx.font="600 40px Consolas, Microsoft YaHei";ctx.fillStyle="#ffe7a8";ctx.fillText("X-2749.07  ·  Y-0318.42  ·  Z-远汐外域",512,314);
+    ctx.font="500 30px Microsoft YaHei";ctx.fillStyle="rgba(255,247,223,.78)";ctx.fillText("持续求救定位正在发送",512,386);
+    const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;return texture;
+  }
+  function makeCoordinatePanel() {
+    const group=new THREE.Group();group.position.set(0,4.5,-56.4);world.add(group);
+    const material=new THREE.MeshBasicMaterial({map:coordinateTexture(),transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide});
+    const panel=new THREE.Mesh(new THREE.PlaneGeometry(6.2,3.1),material);group.add(panel);
+    const halo=new THREE.Mesh(new THREE.RingGeometry(3.55,3.72,96),new THREE.MeshBasicMaterial({color:ZERO.cyan,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));halo.position.z=-.05;group.add(halo);
+    group.userData={panelMaterial:material,haloMaterial:halo.material};coordinateLight=addArcLight([0,4.5,-56.4],ZERO.cyan,0,18);return group;
+  }
+  function makeGatheringStars() {
+    for(let i=0;i<48;i++){
+      const z=8-Math.random()*60,side=Math.random()>.5?1:-1,x=side*(3.4+Math.random()*10.5),y=.8+Math.random()*5.8;
+      const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTexture,color:i%4===0?ZERO.cyan:i%3===0?ZERO.amber:ZERO.warm,transparent:true,opacity:.18,depthWrite:false,blending:THREE.AdditiveBlending}));
+      sprite.position.set(x,y,z);sprite.scale.setScalar(.06+Math.random()*.1);
+      sprite.userData={home:sprite.position.clone(),phase:Math.random()*Math.PI*2};
+      world.add(sprite);gatheringStars.push(sprite);
+    }
+  }
+  function makeCoordinateOrb() {
+    const group=new THREE.Group();group.position.set(0,2.25,-54.5);world.add(group);
+    const coreMaterial=new THREE.MeshBasicMaterial({color:0xfff4c8,transparent:true,opacity:.96,depthWrite:false,blending:THREE.AdditiveBlending});
+    const core=new THREE.Mesh(new THREE.SphereGeometry(.48,30,20),coreMaterial);group.add(core);
+    const glow=new THREE.Mesh(new THREE.SphereGeometry(1.18,30,20),new THREE.MeshBasicMaterial({map:glowTexture,color:ZERO.cyan,transparent:true,opacity:.32,depthWrite:false,blending:THREE.AdditiveBlending}));group.add(glow);
+    const rings=[];for(let i=0;i<3;i++){const ring=new THREE.Mesh(new THREE.TorusGeometry(.78+i*.22,.018,8,56),new THREE.MeshBasicMaterial({color:i===1?ZERO.warm:ZERO.cyan,transparent:true,opacity:.48,depthWrite:false,blending:THREE.AdditiveBlending}));ring.rotation.set(Math.PI/2+i*.32,i*.7,0);group.add(ring);rings.push(ring);}
+    const light=addArcLight([0,2.25,-54.5],ZERO.cyan,82,13);group.userData={core,coreMaterial,glow,glowMaterial:glow.material,rings,light};return group;
+  }
   function buildZeroPointTower() {
     root.dataset.chapter="3";addBackground(1200,0x4a3827,0xfff1d2,0xffdfb6);scene.fog=new THREE.FogExp2(0x4b3a2d,.012);
     const floor=new THREE.Mesh(new THREE.CylinderGeometry(16,16,.28,88),zeroFloor);floor.position.y=-.14;floor.position.z=-20;world.add(floor);
@@ -504,12 +573,12 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
     [[0,-6,5.6,24,0],[0,-31,5.4,27,0],[-7,-18,14,4,.18],[7,-34,13,4,-.16]].forEach(([x,z,w,d,r])=>{const group=new THREE.Group();group.position.set(x,0,z);group.rotation.y=r;world.add(group);addBox([w,.2,d],[0,0,0],zeroFloor,group);addBox([w,.18,.12],[0,.28,-d/2+.12],zeroFrame,group);addBox([w,.18,.12],[0,.28,d/2-.12],zeroFrame,group);});
     for(let z=12;z>-55;z-=8){const arch=new THREE.Mesh(new THREE.TorusGeometry(6.2,.08,12,48),zeroFrame);arch.position.set(0,3.2,z);arch.rotation.x=Math.PI/2;world.add(arch);const lamp=addArcLight([Math.sin(z)*4,3.7,z],z%16?ZERO.warm:ZERO.cyan,45,10);animated.push({type:"zeroLamp",light:lamp,phase:z});}
     makeZeroRoom(-11,3.4,-8,.4,true);makeZeroRoom(10,4.5,-24,-.35,true);makeZeroRoom(-8,2.8,-42,.75,false);makeZeroRoom(9,3.2,-47,-.7,false);
-    const wreck=new THREE.Group();wreck.position.set(0,0,-39);wreck.rotation.set(.1,.28,-.08);world.add(wreck);addBox([5.8,.36,3.6],[0,.35,0],portDark,wreck);addBox([.18,2.4,3.1],[-2.6,1.3,0],portTrim,wreck);addBox([.18,2.1,2.8],[2.6,1.15,0],zeroGlass,wreck);addBox([4.2,.08,.16],[0,1.75,-1.55],zeroRed,wreck);addSign("远汐号 · 分离舱段",[0,2.7,-39],3.2,"#ffcf72");
+    const wreck=new THREE.Group();wreck.position.set(0,0,-39);wreck.rotation.set(.1,.28,-.08);world.add(wreck);addBox([5.8,.36,3.6],[0,.35,0],portDark,wreck);addBox([.18,2.4,3.1],[-2.6,1.3,0],portTrim,wreck);addBox([.18,2.1,2.8],[2.6,1.15,0],zeroGlass,wreck);addBox([4.2,.08,.16],[0,1.75,-1.55],zeroRed,wreck);
     zeroAnchors=[
-      makeZeroAnchor("collar",[-7,1.05,-4],ZERO.cyan,"项圈蓝色脉冲"),
-      makeZeroAnchor("feather",[7,1.05,-14],ZERO.amber,"逗猫棒反光"),
-      makeZeroAnchor("treat",[0,1.05,-26],0xfff0aa,"猫条气味"),
-      makeZeroAnchor("wreck",[0,1.05,-38],ZERO.blue,"远汐号残骸")
+      makeZeroAnchor("collar",[-7,1.05,-4],ZERO.cyan,""),
+      makeZeroAnchor("feather",[7,1.05,-14],ZERO.amber,""),
+      makeZeroAnchor("treat",[0,1.05,-26],0xfff0aa,""),
+      makeZeroAnchor("wreck",[0,1.05,-38],ZERO.blue,"")
     ];
     waterLines=[
       addTube([[-7,.18,-4],[-2,.18,-9],[7,.18,-14]],.055,material(0x8b7d62,.25,.42,ZERO.cyan,.05)),
@@ -518,39 +587,56 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
       addTube([[0,.18,-38],[0,1.5,-44],[0,3.2,-50]],.06,material(0x8b7d62,.2,.38,ZERO.cyan,.05))
     ];
     for(let i=0;i<18;i++){const z=-7-i*1.55;makeRootMark(Math.sin(i*.8)*2.2,z,0xfff0aa);}
-    makeFalseOwner([-9,0,-12],.55,"不要追逐");makeFalseOwner([9,0,-24],-.55,"错误离别");makeFalseOwner([-6,0,-33],.2,"红色警告");
+    makeFalseOwner([-9,0,-12],.55,"");makeFalseOwner([9,0,-24],-.55,"");makeFalseOwner([-6,0,-33],.2,"");
     makeZeroCatEcho([-4,.02,1],.82,true,false);makeZeroCatEcho([4,.02,-9],.62,false,true);makeZeroCatEcho([-3,.02,-18],.82,false,false);makeZeroCatEcho([5,.02,-31],.82,true,false);
     gloveObject=makeZeroGlove();gloveObject.visible=false;
     routeBeam=new THREE.Mesh(new THREE.CylinderGeometry(.12,.5,22,18,true),new THREE.MeshBasicMaterial({color:ZERO.cyan,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));routeBeam.position.set(0,6.8,-59);routeBeam.rotation.x=.38;world.add(routeBeam);
-    addSign("零点塔 · 时空观测核心",[0,4.2,6],5.4,"#fff7df");
+    makeGatheringStars();coordinateOrb=makeCoordinateOrb();coordinatePanel=makeCoordinatePanel();
   }
 
   function buildChapter(chapter) {
-    clearWorld(); state.chapter=chapter;state.stage=0;state.puzzleTurns=0;state.complete=false;state.memoryOpen=false;state.scent=false;state.nearby=null;state.alert=0;state.gloveHold=0;state.holdingGlove=false;player.position.set(0,1.13,14);player.checkpoint.copy(player.position);player.yaw=0;player.pitch=0;player.velocityY=0;player.grounded=true;
+    clearWorld(); state.chapter=chapter;state.stage=0;state.puzzleTurns=0;state.complete=false;state.memoryOpen=false;state.scent=false;state.nearby=null;state.alert=0;state.gloveHold=0;state.holdingGlove=false;state.zeroProgress=0;state.coordinateLocked=false;state.exitGateOpen=false;player.position.set(0,1.13,14);player.checkpoint.copy(player.position);player.yaw=0;player.pitch=0;player.velocityY=0;player.grounded=true;
     state.twoD = false; state.runner = chapter === 2;
     root.classList.remove("two-d-mode"); canvas.hidden=false; port2d.hidden=true;
     if(chapter===2) buildRunnerWorld(); else buildZeroPointTower();
     updateCopy();updateWorldState();
   }
-  function chapterConfig() { return state.chapter===2 ? { kicker:"第二章 · 百目港", gateKicker:"第二章 · 记忆锚点：逗猫棒", gateTitle:"外环逃逸航道", objective:["切到左侧跑道，追上第一束光羽","回到中间跑道，避开前方障碍","切到右侧并跳过能量栏，接住最后光羽"], memory:{k:"逗猫棒记忆 · 02",t:"一束追不上的光",p:"彩色羽毛在走廊尽头晃了一下。你扑过去，主人总会在最后一刻把它抬高，又在你快要失望时把它放回爪边。那时你只记得追逐和笑声。现在，逗猫棒的铃铛重新响起：原来那个一直陪你玩的人，从来没有离开过你的记忆。"}, complete:{k:"第二章完成",t:"追逐没有终点",p:"逗猫棒留下的铃声穿过港口噪音，点亮了下一处异常坐标。更温暖的气味，正从星环温室的方向传来。",next:"前往第三章"} } : { kicker:"第三章 · 零点塔", gateKicker:"第三章 · 记忆锚点：导航手套", gateTitle:"零点塔观测站", objective:["根据项圈蓝色脉冲识别真实声音","扑抓逗猫棒反光，击碎错误影像","开启感知，沿猫条气味找到稳定空间","读取远汐号残骸中的事故影像","顶住乱流，长按导航手套掌心"], memory:{k:"导航手套记忆 · 04",t:"不是不要你",p:"完整事故画面重新亮起。林澈把米粒放进动物休眠舱，将项圈信号接入救生系统，又把逗猫棒和猫条放进救生袋。米粒抓挠透明舱门时，林澈把手掌贴在同一个位置。\n“不是不要你。是要你活下去。”\n救生舱弹射前，破损舱门扯落了林澈的导航手套。米粒只看见那只手突然离开，于是把离别误记成了被放开。最后一段声音留在项圈里：往亮的地方走。我会找到你。"}, complete:{k:"归航信标启动",t:"林澈仍在发送定位",p:"灯泡读取手套里的身份芯片，确认信号来自遥远星域：林澈。它不是过去留下的录音，而是在固定周期内持续发送的求救定位。米粒依次放入项圈、逗猫棒、猫条包装和主人手套，四段时间坐标合成完整航线。青色航线从零点塔延伸向星海：归航并不是回到原点，是终于想起自己为什么出发。",next:"游戏结束 · 返回标题"} };
+  function legacyChapterConfig() { return state.chapter===2 ? { kicker:"第二章 · 百目港", gateKicker:"第二章 · 记忆锚点：逗猫棒", gateTitle:"外环逃逸航道", objective:["切到左侧跑道，追上第一束光羽","回到中间跑道，避开前方障碍","切到右侧并跳过能量栏，接住最后光羽","穿过前方的发光门"], memory:{k:"逗猫棒记忆 · 02",t:"一束追不上的光",p:"彩色羽毛在走廊尽头晃了一下。你扑过去，主人总会在最后一刻把它抬高，又在你快要失望时把它放回爪边。那时你只记得追逐和笑声。现在，逗猫棒的铃铛重新响起：原来那个一直陪你玩的人，从来没有离开过你的记忆。"}, complete:{k:"第二章完成",t:"追逐没有终点",p:"逗猫棒留下的铃声穿过港口噪音，点亮了下一处异常坐标。更温暖的气味，正从星环温室的方向传来。",next:"前往第三章"} } : { kicker:"第三章 · 零点塔", gateKicker:"第三章 · 记忆锚点：导航手套", gateTitle:"零点塔观测站", objective:["根据项圈蓝色脉冲识别真实声音","扑抓逗猫棒反光，击碎错误影像","开启感知，沿猫条气味找到稳定空间","读取远汐号残骸中的事故影像","顶住乱流，长按导航手套掌心"], memory:{k:"导航手套记忆 · 04",t:"不是不要你",p:"完整事故画面重新亮起。林澈把米粒放进动物休眠舱，将项圈信号接入救生系统，又把逗猫棒和猫条放进救生袋。米粒抓挠透明舱门时，林澈把手掌贴在同一个位置。\n“不是不要你。是要你活下去。”\n救生舱弹射前，破损舱门扯落了林澈的导航手套。米粒只看见那只手突然离开，于是把离别误记成了被放开。最后一段声音留在项圈里：往亮的地方走。我会找到你。"}, complete:{k:"归航信标启动",t:"林澈仍在发送定位",p:"灯泡读取手套里的身份芯片，确认信号来自遥远星域：林澈。它不是过去留下的录音，而是在固定周期内持续发送的求救定位。米粒依次放入项圈、逗猫棒、猫条包装和主人手套，四段时间坐标合成完整航线。青色航线从零点塔延伸向星海：归航并不是回到原点，是终于想起自己为什么出发。",next:"游戏结束 · 返回标题"} };
   }
-  function updateCopy() { const data=chapterConfig();kickerEl.textContent=data.kicker;gateKicker.textContent=data.gateKicker;gateTitle.textContent=data.gateTitle;gateHint.textContent=state.runner?"自动前进 · A D 或左右方向键切换跑道 · 空格跳跃":state.chapter===3?"开放式地图 · 依靠气味与记忆锚点前进 · E 互动 · Q 感知":"鼠标控制视角 · W A S D 移动 · 空格跳跃 · Q 感知 · E 互动";completeKicker.textContent=data.complete.k;completeTitle.textContent=data.complete.t;completeText.textContent=data.complete.p;nextButton.textContent=data.complete.next; }
+  function chapterConfig() {
+    if(state.chapter===2)return legacyChapterConfig();
+    return {
+      kicker:"第三章 · 零点塔",
+      gateKicker:"第三章 · 坐标浮现",
+      gateTitle:"零点塔观测站",
+      objective:["向零点塔深处前进","靠近尽头的光球","林澈坐标已浮现"],
+      memory:{k:"坐标信号",t:"林澈",p:"星光聚在米粒身边。远方传来持续发送的坐标：林澈仍在等待归航。"},
+      complete:{k:"坐标锁定",t:"林澈坐标已浮现",p:"星光落在米粒身上，汇成一条暖白色航线。主人坐标已经锁定。",next:"返回标题"}
+    };
+  }
+  function updateCopy() { const data=chapterConfig();kickerEl.textContent=data.kicker;gateKicker.textContent=data.gateKicker;gateTitle.textContent=data.gateTitle;gateHint.textContent=state.runner?"自动前进 · A D 或左右方向键切换跑道 · 空格跳跃":state.chapter===3?"向前走 · 尽头的光球会回应米粒 · 接近后按 E 读取坐标":"鼠标控制视角 · W A S D 移动 · 空格跳跃 · Q 感知 · E 互动";completeKicker.textContent=data.complete.k;completeTitle.textContent=data.complete.t;completeText.textContent=data.complete.p;nextButton.textContent=data.complete.next; }
   function updateObjective() { const data=chapterConfig();while(stepsEl.children.length<data.objective.length)stepsEl.appendChild(document.createElement("i"));while(stepsEl.children.length>data.objective.length)stepsEl.lastElementChild.remove();let text=data.objective[Math.min(state.stage,data.objective.length-1)];if(state.chapter===3&&state.stage===4&&state.gloveHold>0)text=`长按导航手套掌心 ${Math.round(Math.min(1,state.gloveHold/2.25)*100)}%`;
     objectiveEl.textContent=text;[...stepsEl.children].forEach((dot,index)=>{dot.classList.toggle("done",index<state.stage);dot.classList.toggle("active",index===Math.min(state.stage,data.objective.length-1));}); }
-  function updateWorldState() { updateObjective();root.classList.toggle("scent-on",state.scent);modeEl.textContent=state.runner?"自动奔跑":state.chapter===3?(state.scent?"零点塔 · 真实气味":"零点塔 · 时序失效"):state.scent?"感知模式 · 根系可见":"感知模式 · 关闭";if(state.chapter===3){waterLines.forEach((line,index)=>{const active=index<state.stage;line.material.emissiveIntensity=active?2.4:.08;line.material.color.setHex(active?ZERO.cyan:0x8b7d62);});zeroAnchors.forEach((anchor,index)=>{const active=index<=state.stage;anchor.group.scale.setScalar(active?1.08:1);anchor.light.intensity=active?54:22;});if(gloveObject)gloveObject.visible=state.stage>=4;if(routeBeam)routeBeam.material.opacity=state.complete ? .38 : state.stage>=4 ? .08 : 0;} }
+  function updateWorldState() { updateObjective();root.classList.toggle("scent-on",state.scent);modeEl.textContent=state.runner?"自动奔跑":state.chapter===3?(state.coordinateLocked?"林澈坐标 · 已浮现":"零点塔 · 寻找光球"):state.scent?"感知模式 · 根系可见":"感知模式 · 关闭";if(state.chapter===3){const glowStep=state.zeroProgress*4;waterLines.forEach((line,index)=>{const active=index<glowStep;line.material.emissiveIntensity=active?2.4:.08;line.material.color.setHex(active?ZERO.cyan:0x8b7d62);});zeroAnchors.forEach((anchor,index)=>{const active=index<glowStep+.6;anchor.group.scale.setScalar(active?1.08:1);anchor.light.intensity=active?54:16;});if(gloveObject)gloveObject.visible=false;if(routeBeam)routeBeam.material.opacity=state.coordinateLocked ? .32 : 0;} }
   function showToast(text,duration=2800){clearTimeout(toastTimer);toastEl.textContent=text;toastEl.classList.add("visible");toastTimer=setTimeout(()=>toastEl.classList.remove("visible"),duration);}
   function ensureAudio(){if(!audioContext)audioContext=new (window.AudioContext||window.webkitAudioContext)();if(audioContext.state==="suspended")audioContext.resume();}
   function tone(freq,duration=.12,type="sine",gain=.035){try{ensureAudio();const o=audioContext.createOscillator(),g=audioContext.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(gain,audioContext.currentTime);g.gain.exponentialRampToValueAtTime(.0001,audioContext.currentTime+duration);o.connect(g).connect(audioContext.destination);o.start();o.stop(audioContext.currentTime+duration);}catch(_){}}
-  function setScent(force){if(state.twoD||state.runner||!state.playing||state.complete)return;state.scent=typeof force==="boolean"?force:!state.scent;updateWorldState();tone(state.scent?550:210,.18,"sine",.025);if(state.chapter===3&&state.scent)showToast("猫条包装的暖白气味浮出来了，稳定空间正在显形。",2400);}
+  function setScent(force){if(state.twoD||state.runner||!state.playing||state.complete||state.chapter===3)return;state.scent=typeof force==="boolean"?force:!state.scent;updateWorldState();tone(state.scent?550:210,.18,"sine",.025);}
   function showMemory(){const data=chapterConfig().memory;state.memoryOpen=true;state.playing=false;clearInput();memoryKicker.textContent=data.k;memoryTitle.textContent=data.t;memoryText.textContent=data.p;memoryEl.hidden=false;if(document.pointerLockElement===canvas)document.exitPointerLock();memoryContinue.focus();}
   function hideMemory(){if(memoryEl.hidden)return;memoryEl.hidden=true;state.memoryOpen=false;finishChapter();}
-  function captureFeather(){if(state.twoD){collectPortFeather();return;}const previous=activeTarget;previous.visible=false;previous.userData.glow.visible=false;state.pawReachUntil=performance.now()+720;tone(650,.15,"triangle",.05);setTimeout(()=>tone(880,.28,"sine",.04),90);if(state.stage<2){state.stage++;activeTarget=guides[state.stage];activeTarget.visible=true;activeTarget.userData.glow.visible=true;targetLight.position.copy(activeTarget.position);player.checkpoint.copy(player.position);updateObjective();showToast(state.runner?(state.stage===1?"前方中央跑道亮起光羽，避开障碍后追上它。":"最后一束光羽在右侧，跳过能量栏！"):(state.stage===1?"光羽跃上了集装箱高台。跟上它。":"铃铛声穿过扫描区，光羽又飞远了。"),2600);}else{state.stage=3;updateObjective();showMemory();}}
+  function captureFeather(){if(state.twoD){collectPortFeather();return;}const previous=activeTarget;previous.visible=false;previous.userData.glow.visible=false;state.pawReachUntil=performance.now()+720;tone(650,.15,"triangle",.05);setTimeout(()=>tone(880,.28,"sine",.04),90);if(state.stage<2){state.stage++;activeTarget=guides[state.stage];activeTarget.visible=true;activeTarget.userData.glow.visible=true;targetLight.position.copy(activeTarget.position);player.checkpoint.copy(player.position);updateObjective();showToast(state.runner?(state.stage===1?"前方中央跑道亮起光羽，避开障碍后追上它。":"最后一束光羽在右侧，跳过能量栏！"):(state.stage===1?"光羽跃上了集装箱高台。跟上它。":"铃铛声穿过扫描区，光羽又飞远了。"),2600);}else{state.stage=3;updateObjective();if(state.chapter===2)openChapterExitGate();else showMemory();}}
   function startGloveHold(){if(state.stage!==4||state.nearby!=="glove")return;state.holdingGlove=true;progressEl.hidden=false;progressText.textContent="正在贴近导航手套掌心";progressFill.style.width=`${Math.min(100,state.gloveHold/2.25*100)}%`;}
   function stopGloveHold(){state.holdingGlove=false;if(state.chapter===3&&state.stage===4&&state.gloveHold<2.25)progressEl.hidden=true;}
   function solveGarden(){state.pawReachUntil=performance.now()+620;if(state.stage===0){state.stage=1;player.checkpoint.copy(player.position);showToast("项圈蓝色脉冲确认了真实声音。不要追逐红色影像。",3000);tone(540,.18,"sine",.05);}else if(state.stage===1){state.stage=2;player.checkpoint.copy(player.position);showToast("逗猫棒反光击碎了一层虚假离别，残影开始退开。",3000);tone(720,.16,"triangle",.045);setTimeout(()=>tone(880,.22,"sine",.035),90);}else if(state.stage===2){if(!state.scent){showToast("先按 Q 展开感知，让猫条气味指出稳定空间。",2300);return;}state.stage=3;player.checkpoint.copy(player.position);showToast("猫条气味稳定了重复走廊，观测核心的道路打开了。",3000);tone(480,.2,"sine",.05);}else if(state.stage===3){state.stage=4;state.gloveHold=0;player.checkpoint.copy(player.position);showToast("事故前后的影像重叠在远汐号残骸里。上方出现损坏的导航手套。",3600);tone(380,.2,"triangle",.045);setTimeout(()=>tone(620,.28,"sine",.04),140);}else if(state.stage===4){startGloveHold();}updateWorldState();}
-  function interact(){if(!state.playing)return;if(state.twoD){showToast("靠近发光羽毛即可自动收集。",1300);return;}if(state.runner){showToast("航道会自动前进：切换跑道避障，按空格跳过低栏。",1800);return;}if(!state.nearby)return;if(state.chapter===2)captureFeather();else solveGarden();}
-  function finishChapter(){state.complete=true;state.playing=false;state.holdingGlove=false;progressEl.hidden=true;completeEl.hidden=false;updateWorldState();if(document.pointerLockElement===canvas)document.exitPointerLock();tone(430,.22,"sine",.05);setTimeout(()=>tone(660,.42,"triangle",.04),160);}
-  function updateNearby(){state.nearby=null;let text="";if(state.twoD||state.runner){promptEl.hidden=true;touchInteract.classList.remove("ready");return;}if(state.chapter===2&&activeTarget&&player.position.distanceTo(activeTarget.position)<2.1){state.nearby="feather";text="接住逗猫棒光羽";} if(state.chapter===3){const target=zeroAnchors[Math.min(state.stage,3)]?.position;if(state.stage<4&&target&&player.position.distanceTo(target)<2.45){state.nearby="zero";text=state.stage===0?"聆听项圈蓝色脉冲":state.stage===1?"扑抓逗猫棒反光":state.stage===2?(state.scent?"沿猫条气味稳定空间":"按 Q 展开猫条气味"):"读取远汐号事故影像";}else if(state.stage===4&&gloveObject&&player.position.distanceTo(gloveObject.position)<3.1){state.nearby="glove";text="长按导航手套掌心";}}promptEl.hidden=!state.nearby;if(state.nearby){promptEl.querySelector("span").textContent=text;promptEl.querySelector("kbd").textContent=state.nearby==="glove"?"按住 E":"按 E";touchInteract.classList.add("ready");}else touchInteract.classList.remove("ready");}
+  function revealCoordinate(){if(state.coordinateLocked)return;state.coordinateLocked=true;state.stage=2;state.nearby=null;updateWorldState();tone(520,.22,"sine",.04);setTimeout(()=>tone(840,.38,"triangle",.04),150);}
+  function interact(){if(!state.playing)return;if(state.chapter===3){if(state.nearby==="coordinate")revealCoordinate();return;}if(state.twoD){showToast("靠近发光羽毛即可自动收集。",1300);return;}if(state.runner){showToast("航道会自动前进：切换跑道避障，按空格跳过低栏。",1800);return;}if(!state.nearby)return;if(state.chapter===2)captureFeather();else solveGarden();}
+  function resetChapterBridge(){bridgeVideo.pause();bridgeVideo.currentTime=0;bridgeEl.hidden=true;bridgeLaunch.hidden=true;bridgeSkipButton.hidden=false;bridgeEl.classList.remove("is-finished");bridgeProgress.style.width="0%";}
+  function enterThirdChapter(){if(bridgeEl.hidden)return;resetChapterBridge();window.__starTailActiveChapter=3;window.dispatchEvent(new CustomEvent("startail:chapter-select",{detail:{chapter:3}}));window.dispatchEvent(new CustomEvent("startail:chapter-enter",{detail:{chapter:3}}));}
+  function showChapterBridge(){if(state.chapter!==2||!bridgeEl.hidden)return;clearInput();state.playing=false;completeEl.hidden=true;bridgeEl.hidden=false;bridgeLaunch.hidden=true;bridgeSkipButton.hidden=false;bridgeEl.classList.remove("is-finished");bridgeProgress.style.width="0%";if(document.pointerLockElement===canvas)document.exitPointerLock();bridgeVideo.currentTime=0;bridgeVideo.muted=document.querySelector("#soundButton")?.classList.contains("muted")||false;const play=bridgeVideo.play();if(play?.catch)play.catch(()=>{bridgeVideo.muted=true;bridgeVideo.play().catch(showBridgeLaunch);});}
+  function updateBridgeProgress(){if(Number.isFinite(bridgeVideo.duration)&&bridgeVideo.duration>0)bridgeProgress.style.width=`${Math.min(100,bridgeVideo.currentTime/bridgeVideo.duration*100)}%`;}
+  function showBridgeLaunch(){if(bridgeEl.hidden)return;bridgeVideo.pause();bridgeEl.classList.add("is-finished");bridgeSkipButton.hidden=true;bridgeLaunch.hidden=false;bridgeProgress.style.width="100%";bridgeStartButton.focus();}
+  function finishChapter(){state.complete=true;state.playing=false;state.holdingGlove=false;progressEl.hidden=true;updateWorldState();if(document.pointerLockElement===canvas)document.exitPointerLock();tone(430,.22,"sine",.05);setTimeout(()=>tone(660,.42,"triangle",.04),160);if(state.chapter===2){showChapterBridge();return;}completeEl.hidden=false;}
+  function updateNearby(){state.nearby=null;let text="";if(state.twoD||state.runner){promptEl.hidden=true;touchInteract.classList.remove("ready");return;}if(state.chapter===3&&!state.coordinateLocked&&coordinateOrb&&player.position.distanceTo(coordinateOrb.position)<3.2){state.nearby="coordinate";text="触碰尽头的光球";}else if(state.chapter===2&&activeTarget&&player.position.distanceTo(activeTarget.position)<2.1){state.nearby="feather";text="接住逗猫棒光羽";}promptEl.hidden=!state.nearby;if(state.nearby){promptEl.querySelector("span").textContent=text;promptEl.querySelector("kbd").textContent="按 E";touchInteract.classList.add("ready");}else touchInteract.classList.remove("ready");}
   function isBlocked(x,z){const r=.31,limitX=state.chapter===3?15.6:11.72,limitZ=state.chapter===3?-61:-58;if(x<-limitX+r||x>limitX-r||z>17||z<limitZ)return true;for(const box of colliders){const cx=Math.max(box.minX,Math.min(x,box.maxX)),cz=Math.max(box.minZ,Math.min(z,box.maxZ));if((x-cx)**2+(z-cz)**2<r*r)return true;}const footHeight=player.position.y-1.13;for(const platform of platforms){if(x>platform.minX-r&&x<platform.maxX+r&&z>platform.minZ-r&&z<platform.maxZ+r&&footHeight<platform.height-.04)return true;}return false;}
   function groundAt(x,z){let height=0;for(const platform of platforms)if(x>platform.minX&&x<platform.maxX&&z>platform.minZ&&z<platform.maxZ)height=Math.max(height,platform.height);return height;}
   function resetCheckpoint(message){player.position.copy(player.checkpoint);player.velocityY=0;player.grounded=true;state.alert=0;root.classList.add("hit");setTimeout(()=>root.classList.remove("hit"),500);showToast(message);tone(90,.35,"sawtooth",.045);}
@@ -559,27 +645,52 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
   const updateFreeMovement = updateMovement;
   updateMovement = function updateMovementWithRunner(dt){ if(state.runner){ updateRunner(dt); return; } updateFreeMovement(dt); };
   function updateScanners(dt,time){if(state.chapter!==2||state.twoD||state.runner||!state.playing)return;let detected=false;for(const scanner of scanners){scanner.drone.position.x=scanner.origin.x+Math.sin(time*.72+scanner.phase)*4.3;scanner.drone.position.y=scanner.origin.y+Math.sin(time*2+scanner.phase)*.16;scanner.drone.rotation.y=Math.sin(time*.72+scanner.phase)>0?Math.PI:0;scanner.beam.material.opacity=.045+Math.abs(Math.sin(time*2+scanner.phase))*.07;const dist=scanner.drone.position.distanceTo(player.position);if(dist<5.4&&player.position.y<scanner.drone.position.y+.8)detected=true;}state.alert=THREE.MathUtils.clamp(state.alert+(detected?32:-22)*dt,0,100);alertEl.style.width=`${state.alert}%`;alertEl.parentElement.classList.toggle("visible",state.alert>2);if(state.alert>99&&performance.now()-state.lastAlertReset>1200){state.lastAlertReset=performance.now();resetCheckpoint("扫描眼锁定了米粒，已返回最近的安全货台。");}}
+  function updateZeroJourney(dt,time){
+    const progress=THREE.MathUtils.clamp((14-player.position.z)/62,0,1);
+    if(progress>state.zeroProgress+.002)state.zeroProgress=THREE.MathUtils.lerp(state.zeroProgress,progress,Math.min(1,dt*7));
+    const stage=state.coordinateLocked?2:state.zeroProgress>.72?1:0;
+    if(stage!==state.stage){state.stage=stage;updateWorldState();tone(stage===1?560:760,.18,"sine",.032);}
+    gatheringStars.forEach((star,index)=>{
+      const gather=THREE.MathUtils.smoothstep(state.zeroProgress,.18+index*.008,.62+index*.008);
+      const angle=time*(.7+index%4*.12)+star.userData.phase;
+      const radius=.78+(index%6)*.12;
+      temp.set(Math.cos(angle)*radius,2.25+Math.sin(angle*1.7)*.56, -54.5+Math.sin(angle)*radius*.52);
+      star.position.lerpVectors(star.userData.home,temp,gather);
+      star.material.opacity=.08+gather*.27+Math.max(0,Math.sin(time*1.8+index))*.08;
+      star.scale.setScalar(.06+gather*.09);
+    });
+    if(coordinateOrb){const pulse=1+Math.sin(time*2.3)*.08;coordinateOrb.scale.setScalar(pulse);coordinateOrb.userData.glowMaterial.opacity=state.coordinateLocked?.18:.26+Math.sin(time*2.3)*.06;coordinateOrb.userData.coreMaterial.opacity=state.coordinateLocked?.78:.94;coordinateOrb.userData.rings.forEach((ring,index)=>{ring.rotation.z+=dt*(.48+index*.16);ring.material.opacity=state.coordinateLocked?.2:.42+Math.sin(time*2+index)*.08;});coordinateOrb.userData.light.intensity=state.coordinateLocked?55:76+Math.sin(time*2)*10;}
+    const coordinateOpacity=state.coordinateLocked?1:0;
+    if(coordinatePanel){
+      coordinatePanel.userData.panelMaterial.opacity=THREE.MathUtils.lerp(coordinatePanel.userData.panelMaterial.opacity,coordinateOpacity,Math.min(1,dt*3.4));
+      coordinatePanel.userData.haloMaterial.opacity=THREE.MathUtils.lerp(coordinatePanel.userData.haloMaterial.opacity,coordinateOpacity*.58,Math.min(1,dt*3.4));
+      coordinatePanel.rotation.y=Math.sin(time*.45)*.045;
+    }
+    if(coordinateLight)coordinateLight.intensity=THREE.MathUtils.lerp(coordinateLight.intensity,coordinateOpacity*92,Math.min(1,dt*3.4));
+    if(routeBeam)routeBeam.material.opacity=THREE.MathUtils.lerp(routeBeam.material.opacity,coordinateOpacity*.34,Math.min(1,dt*3.4));
+  }
   function updateGloveHold(dt){if(state.chapter!==3||state.stage!==4)return;if(gloveObject&&player.position.z<-43.5&&!state.holdingGlove)player.position.z+=dt*(1.15+Math.max(0,-45-player.position.z)*.18);if(state.holdingGlove&&state.nearby==="glove"){state.gloveHold=Math.min(2.25,state.gloveHold+dt);progressFill.style.width=`${state.gloveHold/2.25*100}%`;updateObjective();if(state.gloveHold>=2.25){state.stage=5;state.holdingGlove=false;progressEl.hidden=true;tone(520,.22,"sine",.05);setTimeout(()=>tone(840,.42,"triangle",.045),130);updateWorldState();showMemory();}}else if(!state.holdingGlove&&state.gloveHold>0&&state.gloveHold<2.25){state.gloveHold=Math.max(0,state.gloveHold-dt*.35);}}
   function updateWorld(dt,time){if(state.chapter===2&&!state.twoD){guides.forEach((guide,index)=>{guide.rotation.y+=dt*(1.2+index*.1);if(index===state.stage)guide.position.y=guide.userData.baseY+Math.sin(time*3+index)*.12;if(guide.userData.glow){guide.userData.glow.position.copy(guide.position);guide.userData.glow.scale.setScalar(1.2+Math.sin(time*4+index)*.16);}});if(targetLight&&activeTarget){targetLight.position.copy(activeTarget.position);targetLight.intensity=50+Math.sin(time*5)*10;}}
-    if(state.chapter===3){scentMarks.forEach((mark,index)=>mark.material.opacity=THREE.MathUtils.lerp(mark.material.opacity,state.scent?(.25+Math.max(0,Math.sin(time*3-index*.45))*.62):0,Math.min(1,dt*7)));falseEchoes.forEach(echo=>{echo.children.forEach(child=>{if(child.material&&"opacity"in child.material)child.material.opacity=.26+Math.sin(time*2.2+echo.position.x)*.14;});if(state.playing&&state.stage<3&&player.position.distanceTo(echo.position)<2.25)resetCheckpoint("追上错误记忆后，走廊重新回到了原点。");});timeGhosts.forEach((ghost,index)=>{ghost.position.y=.02+Math.sin(time*1.4+index)*.05;ghost.rotation.y=Math.sin(time*.8+index)*.18;});updateGloveHold(dt);}
-    animated.forEach(item=>{if(item.type==="crane")item.group.position.y=Math.sin(time*.7)*.08;if(item.type==="gardenLight"||item.type==="zeroLamp")item.light.intensity=45+Math.sin(time*1.5+item.phase)*10;if(item.type==="bud"){const size=.32+Math.sin(time*2+item.phase)*.055;item.sprite.scale.setScalar(size);}if(item.type==="zeroAnchor")item.group.position.y=.05+Math.sin(time*2+item.phase)*.06;if(item.type==="zeroGhostRoom")item.group.position.y+=Math.sin(time*.8+item.phase)*dt*.05;if(item.type==="zeroGlove")item.group.rotation.y+=dt*.55;if(item.type==="gloveRing")item.group.rotation.z+=dt*(.35+item.phase*.1);});updateScanners(dt,time);
+    if(state.chapter===3){scentMarks.forEach((mark,index)=>mark.material.opacity=THREE.MathUtils.lerp(mark.material.opacity,.18+Math.max(0,Math.sin(time*3-index*.45))*.32,Math.min(1,dt*4)));falseEchoes.forEach(echo=>{echo.children.forEach(child=>{if(child.material&&"opacity"in child.material)child.material.opacity=.12+Math.sin(time*1.7+echo.position.x)*.06;});});timeGhosts.forEach((ghost,index)=>{ghost.position.y=.02+Math.sin(time*1.4+index)*.05;ghost.rotation.y=Math.sin(time*.8+index)*.18;});updateZeroJourney(dt,time);}
+    animated.forEach(item=>{if(item.type==="crane")item.group.position.y=Math.sin(time*.7)*.08;if(item.type==="gardenLight"||item.type==="zeroLamp")item.light.intensity=45+Math.sin(time*1.5+item.phase)*10;if(item.type==="bud"){const size=.32+Math.sin(time*2+item.phase)*.055;item.sprite.scale.setScalar(size);}if(item.type==="zeroAnchor")item.group.position.y=.05+Math.sin(time*2+item.phase)*.06;if(item.type==="zeroGhostRoom")item.group.position.y+=Math.sin(time*.8+item.phase)*dt*.05;if(item.type==="zeroGlove")item.group.rotation.y+=dt*.55;if(item.type==="gloveRing")item.group.rotation.z+=dt*(.35+item.phase*.1);if(item.type==="exitGate"){const pulse=1+Math.sin(time*2.4)*.055;item.group.scale.setScalar(pulse);item.group.userData.fieldMaterial.opacity=.15+Math.sin(time*2.4)*.06;item.group.userData.halo.rotation.z+=dt*.8;item.group.userData.light.intensity=76+Math.sin(time*2.4)*14;}});updateScanners(dt,time);
   }
   function updatePaws(time){const walk=player.moving&&player.grounded&&state.playing?Math.sin(player.step):Math.sin(time*1.4)*.1;const bob=player.moving&&player.grounded?Math.abs(Math.sin(player.step*.5))*.026:0;leftPaw.position.set(-.24,-.45-bob+Math.max(0,walk)*.014,-.67+Math.max(0,walk)*.045);rightPaw.position.set(.24,-.45-bob-Math.min(0,walk)*.014,-.67+Math.max(0,-walk)*.045);leftPaw.rotation.z=-.04+walk*.035;rightPaw.rotation.z=.04-walk*.035;const reach=state.pawReachUntil-performance.now();if(reach>0){const amount=Math.sin((1-reach/720)*Math.PI);rightPaw.position.x-=amount*.05;rightPaw.position.y+=amount*.18;rightPaw.position.z+=amount*.15;rightPaw.rotation.x=amount*.2;}else rightPaw.rotation.x=-.03;}
   function updateCamera(){camera.position.copy(player.position);camera.rotation.y=state.runner?0:player.yaw;camera.rotation.x=state.runner?0:player.pitch;camera.rotation.z=0;}
   function animate(){requestAnimationFrame(animate);const dt=Math.min(.04,clock.getDelta()),time=clock.elapsedTime;if(state.active){updateMovement(dt);updateNearby();updateWorld(dt,time);updatePaws(time);updateCamera();}renderer.render(scene,camera);}animate();
   function setSize(){const width=Math.max(1,root.clientWidth),height=Math.max(1,root.clientHeight);renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();}new ResizeObserver(setSize).observe(root);setSize();
   function clearInput(){keys.clear();state.touchMove.x=state.touchMove.y=0;state.stickPointer=null;state.holdingGlove=false;stickKnob.style.transform="translate(0,0)";player.moving=false;}
-  function resetChapter(){buildChapter(state.chapter);memoryEl.hidden=true;completeEl.hidden=true;progressEl.hidden=true;showToast(state.chapter===2?"外环航道已开启：跟随光羽，切换跑道并跳过低栏。":"零点塔的走廊正在重复，只有熟悉气味没有被扭曲。",3800);}
+  function resetChapter(){resetChapterBridge();buildChapter(state.chapter);memoryEl.hidden=true;completeEl.hidden=true;progressEl.hidden=true;showToast(state.chapter===2?"外环航道已开启：跟随光羽，切换跑道并跳过低栏。":"零点塔的走廊正在重复，只有熟悉气味没有被扭曲。",3800);}
   function enterPlay(){clearInput();ensureAudio();state.playing=true;gate.hidden=true;if(!isTouch&&!state.twoD&&canvas.requestPointerLock)canvas.requestPointerLock();}
   function showResume(){if(!state.active||state.complete||state.memoryOpen||!pauseScreen.hidden||isTouch)return;clearInput();state.playing=false;gate.hidden=false;gateTitle.textContent="继续探索";enterButton.textContent="返回场景";}
-  function selectChapter(chapter){const shouldActive=gameScreen.classList.contains("is-active")&&chapter>=2;if(!shouldActive){if(state.active){state.active=false;root.hidden=true;gameScreen.classList.remove("later-chapter-active");}document.body.classList.remove("later-chapter-running");return;}const changed=state.chapter!==chapter;if(!state.active||changed){state.active=true;root.hidden=false;gameScreen.classList.add("later-chapter-active");document.body.classList.add("later-chapter-running");buildChapter(chapter);state.playing=false;gate.hidden=false;enterButton.textContent="进入场景";} }
+  function selectChapter(chapter){const shouldActive=gameScreen.classList.contains("is-active")&&chapter>=2;if(!shouldActive){resetChapterBridge();if(state.active){state.active=false;root.hidden=true;gameScreen.classList.remove("later-chapter-active");}document.body.classList.remove("later-chapter-running");return;}const changed=state.chapter!==chapter;if(!state.active||changed){resetChapterBridge();state.active=true;root.hidden=false;gameScreen.classList.add("later-chapter-active");document.body.classList.add("later-chapter-running");buildChapter(chapter);memoryEl.hidden=true;completeEl.hidden=true;progressEl.hidden=true;state.memoryOpen=false;state.holdingGlove=false;state.playing=false;gate.hidden=false;enterButton.textContent="进入场景";} }
   function syncActive(){const chapter=window.__starTailActiveChapter||1;if(chapter>=2)selectChapter(chapter);else selectChapter(0);}
 
   window.addEventListener("startail:chapter-select",event=>selectChapter(event.detail?.chapter||window.__starTailActiveChapter||1));
   window.addEventListener("startail:chapter-enter",event=>{const chapter=event.detail?.chapter||window.__starTailActiveChapter||1;if(chapter<2)return;window.__starTailActiveChapter=chapter;selectChapter(chapter);if(state.active)enterPlay();});
   new MutationObserver(syncActive).observe(gameScreen,{attributes:true,attributeFilter:["class"]});
   enterButton.addEventListener("click",enterPlay);memoryContinue.addEventListener("click",hideMemory);replayButton.addEventListener("click",()=>{resetChapter();state.playing=true;if(!isTouch&&!state.twoD&&canvas.requestPointerLock)canvas.requestPointerLock();});
-  nextButton.addEventListener("click",()=>{if(state.chapter===2){window.__starTailActiveChapter=3;window.dispatchEvent(new CustomEvent("startail:chapter-select",{detail:{chapter:3}}));}else{window.__starTailActiveChapter=1;document.querySelector("#returnTitleButton")?.click();}});
+  bridgeVideo.addEventListener("timeupdate",updateBridgeProgress);bridgeVideo.addEventListener("ended",showBridgeLaunch);bridgeSkipButton.addEventListener("click",showBridgeLaunch);bridgeStartButton.addEventListener("click",enterThirdChapter);
+  nextButton.addEventListener("click",()=>{if(state.chapter===2){window.__starTailActiveChapter=3;window.dispatchEvent(new CustomEvent("startail:chapter-select",{detail:{chapter:3}}));window.dispatchEvent(new CustomEvent("startail:chapter-enter",{detail:{chapter:3}}));}else{window.__starTailActiveChapter=1;document.querySelector("#returnTitleButton")?.click();}});
   canvas.addEventListener("click",()=>{if(state.active&&!state.twoD&&state.playing&&!isTouch&&document.pointerLockElement!==canvas&&pauseScreen.hidden)canvas.requestPointerLock();});
   document.addEventListener("pointerlockchange",()=>{if(state.active&&document.pointerLockElement!==canvas&&state.playing)showResume();});
   document.addEventListener("mousemove",event=>{if(!state.active||document.pointerLockElement!==canvas||!state.playing)return;player.yaw-=event.movementX*.00215;player.pitch=THREE.MathUtils.clamp(player.pitch-event.movementY*.00185,-.92,.78);});
@@ -590,5 +701,5 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
   stick.addEventListener("pointerdown",event=>{state.stickPointer=event.pointerId;stick.setPointerCapture(event.pointerId);updateStick(event);});stick.addEventListener("pointermove",event=>{if(event.pointerId===state.stickPointer)updateStick(event);});const stopStick=event=>{if(event.pointerId!==state.stickPointer)return;state.stickPointer=null;state.touchMove.x=state.touchMove.y=0;stickKnob.style.transform="translate(0,0)";};stick.addEventListener("pointerup",stopStick);stick.addEventListener("pointercancel",stopStick);
   lookzone.addEventListener("pointerdown",event=>{state.lookPointer=event.pointerId;state.lookLast.x=event.clientX;state.lookLast.y=event.clientY;lookzone.setPointerCapture(event.pointerId);});lookzone.addEventListener("pointermove",event=>{if(event.pointerId!==state.lookPointer||!state.playing)return;const dx=event.clientX-state.lookLast.x,dy=event.clientY-state.lookLast.y;state.lookLast.x=event.clientX;state.lookLast.y=event.clientY;player.yaw-=dx*.0062;player.pitch=THREE.MathUtils.clamp(player.pitch-dy*.0052,-.92,.78);});["pointerup","pointercancel"].forEach(type=>lookzone.addEventListener(type,event=>{if(event.pointerId===state.lookPointer)state.lookPointer=null;}));touchSense.addEventListener("click",()=>setScent());touchJump.addEventListener("click",jump);touchInteract.addEventListener("pointerdown",event=>{if(state.chapter===3&&state.nearby==="glove"){event.preventDefault();interact();}});["pointerup","pointercancel","pointerleave"].forEach(type=>touchInteract.addEventListener(type,stopGloveHold));touchInteract.addEventListener("click",()=>{if(!(state.chapter===3&&state.nearby==="glove"))interact();});
   port2dFeathers.forEach((feather, index) => feather.addEventListener("click", () => { if (state.twoD && state.playing && index === state.stage) collectPortFeather(); }));
-  window.__starTailLaterChapters={select:chapter=>{window.__starTailActiveChapter=chapter;selectChapter(chapter);},snapshot:()=>({chapter:state.chapter,stage:state.stage,complete:state.complete,position:player.position.toArray(),scent:state.scent})};syncActive();
+  window.__starTailLaterChapters={select:chapter=>{window.__starTailActiveChapter=chapter;selectChapter(chapter);},snapshot:()=>({chapter:state.chapter,stage:state.stage,complete:state.complete,position:player.position.toArray(),scent:state.scent,zeroProgress:state.zeroProgress,coordinateLocked:state.coordinateLocked})};syncActive();
 })();

@@ -14,7 +14,7 @@
     promptText: $("#promptText"), objective: $("#objective"), chapterIndex: $("#chapterIndex"),
     chapterName: $("#chapterName"), caption: $("#sceneCaption"), subtitle: $("#subtitle"),
     speaker: $("#speaker"), subtitleText: $("#subtitleText"), sound: $("#soundButton"), pause: $("#pauseButton"),
-    pauseScreen: $("#pauseScreen"), resume: $("#resumeButton"), restart: $("#restartButton"),
+    pauseScreen: $("#pauseScreen"), pauseMenu: $("#pauseScreen .compact-panel"), chapterSelect: $("#chapterSelectPanel"), chapterSelectBack: $("#chapterSelectBack"), resume: $("#resumeButton"), restart: $("#restartButton"),
     settings: $("#settingsButton"), returnTitle: $("#returnTitleButton"),
     story: $("#storyOverlay"), storyIndex: $("#storyIndex"), storyTitle: $("#storyTitle"),
     storyText: $("#storyText"), storyNext: $("#storyNext"), puzzle: $("#puzzleOverlay"),
@@ -679,7 +679,29 @@
 
   function setPaused(on) {
     if (!state.started || el.ending.classList.contains("is-active")) return;
-    state.paused = on; el.pauseScreen.hidden = !on; if (on) state.moving = 0;
+    state.paused = on; el.pauseScreen.hidden = !on; if (on) state.moving = 0; else closeChapterSelect();
+  }
+
+  function openChapterSelect() {
+    if (!state.started) return;
+    state.moving = 0; state.paused = true;
+    el.pauseMenu.hidden = true; el.chapterSelect.hidden = false;
+    el.chapterSelect.querySelector("[data-chapter='1']")?.focus();
+  }
+
+  function closeChapterSelect() {
+    if (!el.chapterSelect || el.chapterSelect.hidden) return;
+    el.chapterSelect.hidden = true; el.pauseMenu.hidden = false;
+  }
+
+  function startSelectedChapter(chapter) {
+    closeChapterSelect();
+    state.paused = false; state.started = true; state.locked = false; state.moving = 0; state.sensing = false;
+    el.world.classList.remove("sensing"); el.pauseScreen.hidden = true; el.game.classList.add("is-active");
+    window.__starTailActiveChapter = chapter;
+    if (chapter === 1) setScene(0, true);
+    window.dispatchEvent(new CustomEvent("startail:chapter-select", { detail: { chapter } }));
+    window.dispatchEvent(new CustomEvent("startail:chapter-enter", { detail: { chapter } }));
   }
 
   function returnToTitle() {
@@ -737,7 +759,9 @@
     el.sense.addEventListener("click", () => setSense(!state.sensing, !state.sensing));
     bindHold(el.left, -1); bindHold(el.right, 1);
     el.pause.addEventListener("click", () => setPaused(true)); el.resume.addEventListener("click", () => setPaused(false));
-    el.restart.addEventListener("click", () => { el.pauseScreen.hidden = true; resetGame(false); });
+    el.restart.addEventListener("click", event => { event.stopImmediatePropagation(); openChapterSelect(); });
+    el.chapterSelectBack.addEventListener("click", closeChapterSelect);
+    $$(".chapter-select-card").forEach(card => card.addEventListener("click", () => startSelectedChapter(Number(card.dataset.chapter))));
     el.settings.addEventListener("click", () => { el.sound.click(); el.settings.setAttribute("aria-label", state.muted ? "设置：声音已关闭" : "设置：声音已开启"); });
     el.returnTitle.addEventListener("click", returnToTitle);
     el.sound.addEventListener("click", () => { state.muted = !state.muted; el.sound.classList.toggle("muted", state.muted); el.sound.setAttribute("aria-label", state.muted ? "开启声音" : "关闭声音"); audio.setMuted(state.muted); if (!state.muted) audio.ui("confirm"); if (state.muted && "speechSynthesis" in window) speechSynthesis.cancel(); });

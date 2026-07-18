@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#07111f" />
   <meta name="description" content="《星尾归航》— 一只失去记忆的橘猫追随星际遗迹中的记忆锚点，寻找自己与回家坐标的互动叙事 H5 游戏。" />
   <title>星尾归航｜STARTAIL</title>
-  <link rel="stylesheet" href="styles.css?v=20260718-04" />
+  <link rel="stylesheet" href="styles.css?v=20260718-06" />
 </head>
 <body>
   <main id="app" aria-live="polite">
@@ -181,10 +181,19 @@
       <div class="pause-art-stage">
         <nav class="panel compact-panel" aria-label="暂停菜单">
           <button id="resumeButton" class="pause-hotspot pause-resume" type="button" aria-label="继续旅程">继续旅程</button>
-          <button id="restartButton" class="pause-hotspot pause-chapters" type="button" aria-label="章节选择：重新开始第一章">章节选择</button>
+          <button id="restartButton" class="pause-hotspot pause-chapters" type="button" aria-label="打开章节选择" aria-haspopup="dialog">章节选择</button>
           <button id="settingsButton" class="pause-hotspot pause-settings" type="button" aria-label="设置：切换声音">设置</button>
           <button id="returnTitleButton" class="pause-hotspot pause-title" type="button" aria-label="返回标题">返回标题</button>
         </nav>
+        <section id="chapterSelectPanel" class="chapter-select-panel" aria-label="章节选择" hidden>
+          <div class="chapter-select-head"><div class="chapter-select-title"><small>米粒的回家航线</small><h2>章节选择</h2><b aria-hidden="true">✦</b></div><button id="chapterSelectBack" type="button" aria-label="返回暂停菜单">返回</button></div>
+          <div class="chapter-select-cards">
+            <button class="chapter-select-card chapter-select-one" type="button" data-chapter="1"><span class="chapter-card-art" aria-hidden="true"></span><span class="chapter-card-paper"><small>第一章</small><strong>苔原七号</strong><em>找回名字与项圈的记忆</em><b>项圈</b></span><i aria-hidden="true">✦</i></button>
+            <button class="chapter-select-card chapter-select-two" type="button" data-chapter="2"><span class="chapter-card-art" aria-hidden="true"></span><span class="chapter-card-paper"><small>第二章</small><strong>百目港</strong><em>在霓虹航道追逐逗猫棒光羽</em><b>逗猫棒</b></span><i aria-hidden="true">✦</i></button>
+            <button class="chapter-select-card chapter-select-three" type="button" data-chapter="3"><span class="chapter-card-art" aria-hidden="true"></span><span class="chapter-card-paper"><small>第三章</small><strong>眠海花园</strong><em>追踪气味，唤醒生态温室</em><b>猫条</b></span><i aria-hidden="true">✦</i></button>
+          </div>
+          <footer class="chapter-select-progress"><span>旅程进度</span><b aria-hidden="true"></b><i><u></u><u></u><u></u></i><em>选择</em><em>返回</em><em>确认</em></footer>
+        </section>
       </div>
     </section>
 
@@ -228,7 +237,7 @@
     </section>
   </main>
   <noscript>请开启 JavaScript 体验《星尾归航》。</noscript>
-  <script src="game.js?v=20260718-02"></script>
+  <script src="game.js?v=20260718-03"></script>
   <script src="chapter-one-3d.bundle.js?v=20260718-05"></script>
   <script src="chapter-two-three-3d.bundle.js?v=20260718-05"></script>
 </body>
