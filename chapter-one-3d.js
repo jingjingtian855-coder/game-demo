@@ -57,6 +57,7 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
         <span>检查点已抵达</span>
         <h2>第一章完成</h2>
         <p>项圈唤回了第一段记忆：一双手曾把你从纸箱里抱起，并轻声叫你“米粒”。更远处，还有熟悉的气味等待回应。</p>
+        <button id="chapter3dNext" class="chapter3d-next" type="button">前往第二章</button>
         <button id="chapter3dReplay" type="button">重新游玩</button>
       </div>
     </section>
@@ -89,6 +90,7 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   const alertEl = root.querySelector("#chapter3dAlert");
   const alertFill = alertEl.querySelector("b");
   const completeEl = root.querySelector("#chapter3dComplete");
+  const nextButton = root.querySelector("#chapter3dNext");
   const replayButton = root.querySelector("#chapter3dReplay");
   const joystick = root.querySelector("#chapter3dJoystick");
   const joystickKnob = joystick.querySelector("i");
@@ -1281,9 +1283,10 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   }
 
   function activateIfNeeded() {
-    const active = gameScreen.classList.contains("is-active");
+    const active = gameScreen.classList.contains("is-active") && (window.__starTailActiveChapter || 1) === 1;
     if (active === state.active) return;
     state.active = active;
+    root.hidden = !active;
     gameScreen.classList.toggle("chapter-one-active", active);
     document.body.classList.toggle("chapter-one-running", active);
     if (active) {
@@ -1299,6 +1302,12 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   }
 
   new MutationObserver(activateIfNeeded).observe(gameScreen, { attributes: true, attributeFilter: ["class"] });
+  window.addEventListener("startail:chapter-select", activateIfNeeded);
+  window.addEventListener("startail:chapter-enter", event => {
+    if (event.detail?.chapter && event.detail.chapter !== 1) return;
+    activateIfNeeded();
+    if (state.active) enterPlay();
+  });
   activateIfNeeded();
 
   enterButton.addEventListener("click", enterPlay);
@@ -1307,6 +1316,10 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     resetChapter();
     state.playing = true;
     if (!isTouch && canvas.requestPointerLock) canvas.requestPointerLock();
+  });
+  nextButton.addEventListener("click", () => {
+    window.__starTailActiveChapter = 2;
+    window.dispatchEvent(new CustomEvent("startail:chapter-select", { detail: { chapter: 2 } }));
   });
   canvas.addEventListener("click", () => {
     if (state.active && state.playing && !isTouch && document.pointerLockElement !== canvas && pauseScreen.hidden) canvas.requestPointerLock();

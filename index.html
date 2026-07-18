@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#07111f" />
   <meta name="description" content="《星尾归航》— 一只失去记忆的橘猫追随星际遗迹中的记忆锚点，寻找自己与回家坐标的互动叙事 H5 游戏。" />
   <title>星尾归航｜STARTAIL</title>
-  <link rel="stylesheet" href="styles.css?v=20260718-03" />
+  <link rel="stylesheet" href="styles.css?v=20260718-04" />
 </head>
 <body>
   <main id="app" aria-live="polite">
@@ -86,6 +86,24 @@
       </div>
       <div id="cinematicResult" class="cinematic-result" hidden><i></i><span>休眠系统已稳定</span></div>
       <div id="cinematicFlash" class="cinematic-flash" aria-hidden="true"></div>
+    </section>
+
+    <section id="departureVideoScreen" class="screen departure-video-screen" aria-label="导入视频：出发">
+      <video id="departureVideo" preload="auto" playsinline>
+        <source src="assets/video/departure/departure-intro.mp4" type="video/mp4" />
+      </video>
+      <div class="departure-video-shade" aria-hidden="true"></div>
+      <header class="departure-video-chrome">
+        <div class="departure-video-progress"><i id="departureVideoProgress"></i></div>
+        <button id="skipDepartureVideo" class="skip-button" type="button">跳过导入</button>
+      </header>
+      <div id="departureLaunch" class="departure-launch" hidden>
+        <span>CHAPTER 01 / RECOVERY BAY</span>
+        <h2>出发</h2>
+        <button id="departureStartButton" class="primary-button" type="button">
+          <span>出发</span><i aria-hidden="true">→</i>
+        </button>
+      </div>
     </section>
 
     <section id="gameScreen" class="screen game-screen" aria-label="游戏区域">
@@ -210,7 +228,8 @@
     </section>
   </main>
   <noscript>请开启 JavaScript 体验《星尾归航》。</noscript>
-  <script src="game.js?v=20260718-01"></script>
-  <script src="chapter-one-3d.bundle.js?v=20260718-03"></script>
+  <script src="game.js?v=20260718-02"></script>
+  <script src="chapter-one-3d.bundle.js?v=20260718-05"></script>
+  <script src="chapter-two-three-3d.bundle.js?v=20260718-01"></script>
 </body>
 </html>

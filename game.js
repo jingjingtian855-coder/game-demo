@@ -28,7 +28,9 @@
     cinematicSubtext: $("#cinematicSubtext"), wakeHotspot: $("#wakeHotspot"), orbHotspot: $("#orbHotspot"),
     orbCounter: $("#orbCounter"), turbulenceQte: $("#turbulenceQte"), stabilityPercent: $("#stabilityPercent"),
     stabilityFill: $("#stabilityFill"), stabilityButton: $("#stabilityButton"), cinematicResult: $("#cinematicResult"),
-    cinematicFlash: $("#cinematicFlash")
+    cinematicFlash: $("#cinematicFlash"), departure: $("#departureVideoScreen"), departureVideo: $("#departureVideo"),
+    departureProgress: $("#departureVideoProgress"), skipDepartureVideo: $("#skipDepartureVideo"),
+    departureLaunch: $("#departureLaunch"), departureStart: $("#departureStartButton")
   };
 
   const introSlides = [
@@ -70,9 +72,9 @@
   ];
 
   const textPrologueBackgrounds = [
-    "assets/images/prologue/route-city.png",
-    "assets/images/prologue/cargo-voyage.png",
-    "assets/images/prologue/warp-route.png",
+    "assets/images/prologue/intro-1.png",
+    "assets/images/prologue/intro-2.png",
+    "assets/images/prologue/intro-3.png",
     "assets/images/prologue/lost-home.png"
   ];
 
@@ -619,8 +621,46 @@
   function finishCinematic() {
     if (state.cinematicFinished) return;
     state.cinematicFinished = true; cancelAnimationFrame(state.qteRaf); state.holdingStability = false; el.prologueVideo.pause();
-    el.cinematic.classList.remove("is-active", "awaiting"); el.game.classList.add("is-active");
+    el.cinematic.classList.remove("is-active", "awaiting");
+    startDepartureVideo();
+  }
+
+  function startDepartureVideo() {
+    state.started = false; state.paused = false; state.moving = 0; state.locked = false;
+    el.departure.classList.add("is-active"); el.departure.classList.remove("is-finished");
+    el.departureLaunch.hidden = true; el.skipDepartureVideo.hidden = false; el.departureProgress.style.width = "0%";
+    el.departureVideo.currentTime = 0; el.departureVideo.muted = state.muted;
+    const play = el.departureVideo.play();
+    if (play?.catch) play.catch(() => {
+      el.departureVideo.muted = true;
+      el.departureVideo.play().catch(showDepartureLaunch);
+    });
+  }
+
+  function updateDepartureProgress() {
+    const video = el.departureVideo;
+    if (Number.isFinite(video.duration) && video.duration > 0) {
+      el.departureProgress.style.width = `${Math.min(100, video.currentTime / video.duration * 100)}%`;
+    }
+  }
+
+  function showDepartureLaunch() {
+    el.departureVideo.pause();
+    el.departure.classList.add("is-finished");
+    el.skipDepartureVideo.hidden = true;
+    el.departureLaunch.hidden = false;
+    el.departureProgress.style.width = "100%";
+  }
+
+  function enterFirstChapterFromDeparture() {
+    el.departureVideo.pause();
+    el.departure.classList.remove("is-active", "is-finished");
+    el.departureLaunch.hidden = true;
+    el.game.classList.add("is-active");
+    window.__starTailActiveChapter = 1;
     state.started = true; state.paused = false; audio.start(); setScene(0, true); audio.meow();
+    window.dispatchEvent(new CustomEvent("startail:chapter-select", { detail: { chapter: 1 } }));
+    window.dispatchEvent(new CustomEvent("startail:chapter-enter", { detail: { chapter: 1 } }));
     setTimeout(() => showSubtitle("未知声音", "……别怕……我会找到你……", 3400, true), 700);
   }
 
@@ -645,8 +685,9 @@
   function returnToTitle() {
     state.paused = false; state.started = false; state.locked = false; state.moving = 0; state.sensing = false;
     el.pauseScreen.hidden = true; el.story.hidden = true; el.puzzle.hidden = true;
-    el.cinematic.classList.remove("is-active", "awaiting"); el.game.classList.remove("is-active"); el.ending.classList.remove("is-active");
-    el.title.classList.add("is-active"); el.prologueVideo.pause();
+    el.cinematic.classList.remove("is-active", "awaiting"); el.departure.classList.remove("is-active", "is-finished");
+    el.game.classList.remove("is-active"); el.ending.classList.remove("is-active");
+    el.title.classList.add("is-active"); el.prologueVideo.pause(); el.departureVideo.pause();
     if (document.pointerLockElement) document.exitPointerLock();
     if ("speechSynthesis" in window) speechSynthesis.cancel();
   }
@@ -659,8 +700,8 @@
 
   function bindButtonAudio() {
     const soundKind = button => {
-      if (button.matches("#startButton,#chapter3dEnter,#storyNext,#puzzleClose,#chapter3dTouchInteract,.primary-button")) return "confirm";
-      if (button.matches("#pauseButton,#resumeButton,#soundButton,#settingsButton,#skipCinematic,#textPrologueSkip")) return "soft";
+      if (button.matches("#startButton,#departureStartButton,#chapter3dEnter,#storyNext,#puzzleClose,#chapter3dTouchInteract,.primary-button")) return "confirm";
+      if (button.matches("#pauseButton,#resumeButton,#soundButton,#settingsButton,#skipCinematic,#skipDepartureVideo,#textPrologueSkip")) return "soft";
       if (button.matches("#returnTitleButton,#restartButton,#replayButton,#chapter3dReplay")) return "back";
       return "tap";
     };
@@ -688,6 +729,8 @@
     el.textPrologueSkip.addEventListener("click", finishTextPrologue);
     el.prologueVideo.addEventListener("timeupdate", onCinematicTime); el.prologueVideo.addEventListener("ended", finishCinematic);
     el.skipCinematic.addEventListener("click", finishCinematic); el.wakeHotspot.addEventListener("click", wakeCat); el.orbHotspot.addEventListener("click", chaseOrb);
+    el.departureVideo.addEventListener("timeupdate", updateDepartureProgress); el.departureVideo.addEventListener("ended", showDepartureLaunch);
+    el.skipDepartureVideo.addEventListener("click", showDepartureLaunch); el.departureStart.addEventListener("click", enterFirstChapterFromDeparture);
     el.stabilityButton.addEventListener("pointerdown", e => { e.preventDefault(); setStabilityHold(true); });
     ["pointerup","pointercancel","pointerleave"].forEach(type => el.stabilityButton.addEventListener(type, e => { e.preventDefault(); setStabilityHold(false); }));
     el.jump.addEventListener("click", jump); el.action.addEventListener("click", interact);
@@ -706,6 +749,13 @@
       if (el.textPrologue.classList.contains("is-active")) {
         if (["ArrowRight","Enter","Space"].includes(e.code) && !e.repeat) advanceTextPrologue();
         if (e.code === "Escape") finishTextPrologue();
+        return;
+      }
+      if (el.departure.classList.contains("is-active")) {
+        if (["Enter","Space"].includes(e.code) && !e.repeat) {
+          if (el.departureLaunch.hidden) showDepartureLaunch(); else enterFirstChapterFromDeparture();
+        }
+        if (e.code === "Escape") showDepartureLaunch();
         return;
       }
       if (e.repeat && ["KeyE","Space"].includes(e.code)) return;
