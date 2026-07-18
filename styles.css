@@ -1053,6 +1053,17 @@ body.chapter-one-running #pauseScreen { background:#020711;backdrop-filter:none;
 .chapter3d-progress span { position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:8px;font-weight:900;letter-spacing:.12em;text-shadow:0 1px 5px #000; }
 .chapter3d-toast { position:absolute;z-index:11;left:50%;top:17%;max-width:min(560px,78vw);padding:11px 22px;transform:translate(-50%,-12px);opacity:0;color:#fff7df;background:rgba(2,10,21,.86);border-left:3px solid #27e0d1;border-right:3px solid #ff2d87;font-size:11px;font-weight:700;letter-spacing:.08em;text-align:center;pointer-events:none;transition:.28s ease; }
 .chapter3d-toast.visible { opacity:1;transform:translate(-50%,0); }
+.chapter3d-memory { position:absolute;z-index:28;inset:0;display:grid;place-items:center;padding:24px;background:rgba(1,7,16,.62);backdrop-filter:blur(7px) saturate(.8); }
+.chapter3d-memory-card { position:relative;isolation:isolate;width:min(620px,88vw);max-height:88vh;overflow:auto;padding:45px 54px 42px;color:#07111f;background:#fff7df;clip-path:polygon(2% 0,22% 2%,36% 0,67% 2%,96% 0,100% 18%,98% 45%,100% 96%,72% 100%,44% 97%,4% 100%,0 73%,2% 31%);box-shadow:15px 16px 0 #ff2d87,-10px -11px 0 #27e0d1; }
+.chapter3d-memory-card::before,.chapter3d-memory-card::after { content:"";position:absolute;z-index:-1;pointer-events:none; }
+.chapter3d-memory-card::before { width:180px;height:48px;right:-34px;top:58px;background:#27e0d1;transform:rotate(8deg);opacity:.82; }
+.chapter3d-memory-card::after { width:138px;height:36px;left:-22px;bottom:84px;background:#ff2d87;transform:rotate(-7deg);opacity:.78; }
+.chapter3d-memory-kicker { display:inline-block;margin-bottom:12px;padding:6px 13px;color:#fff7df;background:#ff2d87;font-family:var(--font-display);font-size:9px;font-weight:900;letter-spacing:.18em;transform:rotate(-1deg); }
+.chapter3d-memory h2 { position:relative;margin:0 0 22px;font-family:var(--font-display);font-size:48px;line-height:1;text-shadow:3px 3px 0 rgba(37,226,206,.62); }
+.chapter3d-memory p { position:relative;max-width:500px;margin:0 0 13px;color:#243746;font-size:13px;font-weight:700;line-height:1.85;letter-spacing:.045em; }
+.chapter3d-memory-name { position:relative;display:inline-block;margin:-2px 0 17px;padding:9px 22px;color:#fff7df;background:#07111f;font-family:var(--font-display);font-size:22px;letter-spacing:.2em;box-shadow:6px 6px 0 #27e0d1;transform:rotate(-1deg); }
+.chapter3d-memory button { position:relative;min-width:230px;min-height:53px;margin-top:7px;border:0;color:#fff7df;background:#07111f;font-weight:900;letter-spacing:.1em;cursor:pointer;clip-path:polygon(4% 0,96% 5%,100% 80%,92% 100%,5% 96%,0 22%);box-shadow:7px 7px 0 #ff2d87;transition:.2s ease; }
+.chapter3d-memory button:hover { transform:translateY(-3px);background:#132d42; }
 .chapter3d-gate,.chapter3d-complete { position:absolute;z-index:30;inset:0;display:grid;place-items:center;padding:24px;background:rgba(1,5,12,.68);backdrop-filter:blur(10px) saturate(.72); }
 .chapter3d-gate > div,.chapter3d-complete > div { width:min(590px,88vw);padding:54px 58px 48px;color:#07111f;background:#fff7df;clip-path:polygon(2% 0,29% 2%,36% 0,68% 2%,96% 0,100% 20%,98% 64%,100% 96%,72% 100%,44% 97%,4% 100%,0 74%,2% 32%);box-shadow:14px 16px 0 #ff2d87,-9px -10px 0 #27e0d1;text-align:center; }
 .chapter3d-gate span,.chapter3d-complete span { display:inline-block;margin-bottom:10px;padding:6px 14px;color:#fff;background:#ff2d87;font-size:8px;font-weight:900;letter-spacing:.2em;transform:rotate(-1deg); }
@@ -1092,6 +1103,7 @@ body.chapter-one-running #pauseScreen { background:#020711;backdrop-filter:none;
   .chapter3d-scent { top:76px;padding:6px 10px 6px 7px;font-size:7px; }.chapter3d-scent i{width:12px;height:12px}
   .chapter3d-alert { width:44vw;font-size:6px; }
   .chapter3d-toast { top:16%;font-size:8px; }
+  .chapter3d-memory { padding:18px; }.chapter3d-memory-card{padding:32px 28px 29px}.chapter3d-memory h2{margin-bottom:16px;font-size:36px}.chapter3d-memory p{margin-bottom:10px;font-size:11px;line-height:1.75}.chapter3d-memory-name{margin-bottom:13px;font-size:18px}.chapter3d-memory button{min-width:210px;min-height:49px;font-size:10px}
   .chapter3d-gate > div,.chapter3d-complete > div { padding:36px 28px 34px; }
   .chapter3d-gate h2,.chapter3d-complete h2 { font-size:40px; }.chapter3d-gate p,.chapter3d-complete p{font-size:9px;margin-bottom:23px}.chapter3d-gate button,.chapter3d-complete button{min-width:180px;min-height:50px;font-size:11px}
   .chapter3d-prompt { min-width:190px;padding:12px 19px 11px 49px;font-size:10px; }.chapter3d-prompt kbd{left:13px;font-size:7px}
@@ -1099,6 +1111,7 @@ body.chapter-one-running #pauseScreen { background:#020711;backdrop-filter:none;
 
 @media (max-height:560px) {
   .chapter3d-hud { top:9px; }.chapter3d-objective{min-height:58px;padding-top:9px}.chapter3d-scent{top:65px}
+  .chapter3d-memory-card { width:min(620px,86vw);padding:24px 38px 22px; }.chapter3d-memory h2{margin-bottom:11px;font-size:36px}.chapter3d-memory p{margin-bottom:8px;line-height:1.58}.chapter3d-memory-name{margin-bottom:9px}.chapter3d-memory button{min-height:44px}
   .chapter3d-gate > div,.chapter3d-complete > div { width:min(540px,82vw);padding:24px 42px 22px; }.chapter3d-gate h2,.chapter3d-complete h2{font-size:38px;margin-bottom:10px}.chapter3d-gate p,.chapter3d-complete p{margin-bottom:15px;line-height:1.55}.chapter3d-gate button,.chapter3d-complete button{min-height:44px}
   .chapter3d-joystick { width:94px;height:94px; }.chapter3d-joystick i{width:40px;height:40px;margin:-20px}.chapter3d-touch-actions{grid-template-columns:repeat(2,50px);grid-template-rows:repeat(2,50px);gap:7px}.chapter3d-touch-actions button{font-size:8px}
 }

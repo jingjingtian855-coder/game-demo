@@ -31,6 +31,19 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     <div class="chapter3d-prompt" id="chapter3dPrompt" hidden><kbd>按住 E</kbd><span>互动</span></div>
     <div class="chapter3d-progress" id="chapter3dProgress" hidden><i></i><span>正在抓挠电缆</span></div>
     <div class="chapter3d-toast" id="chapter3dToast" aria-live="polite"></div>
+    <section class="chapter3d-memory" id="chapter3dMemory" role="dialog" aria-modal="true" aria-labelledby="chapter3dMemoryTitle" hidden>
+      <article class="chapter3d-memory-card">
+        <span class="chapter3d-memory-kicker">项圈记忆 · 01</span>
+        <h2 id="chapter3dMemoryTitle">雨里的名字</h2>
+        <p>货运港的灯坏了一半，水滴顺着金属屋檐落下。小小的它躲在空货箱里，尾巴紧紧贴着身体。有人经过，有人停下，又很快离开。</p>
+        <p>只有一个人蹲了下来。</p>
+        <p>那个人没有说太多话，只把自己的外套铺在箱口，又把一只旧项圈轻轻放在上面。</p>
+        <p>雨声里，项圈亮起一行小小的字：</p>
+        <strong class="chapter3d-memory-name">MILI</strong>
+        <p>那个人笑了一下。</p>
+        <button id="chapter3dMemoryContinue" type="button">收起记忆 · 继续前行</button>
+      </article>
+    </section>
     <section class="chapter3d-gate" id="chapter3dGate">
       <div>
         <span>第一章</span>
@@ -70,6 +83,8 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   const progressEl = root.querySelector("#chapter3dProgress");
   const progressFill = progressEl.querySelector("i");
   const toastEl = root.querySelector("#chapter3dToast");
+  const memoryEl = root.querySelector("#chapter3dMemory");
+  const memoryContinueButton = root.querySelector("#chapter3dMemoryContinue");
   const scentEl = root.querySelector("#chapter3dScent");
   const alertEl = root.querySelector("#chapter3dAlert");
   const alertFill = alertEl.querySelector("b");
@@ -139,6 +154,7 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     active: false,
     playing: false,
     complete: false,
+    memoryOpen: false,
     stage: 0,
     scent: false,
     holdingInteract: false,
@@ -873,6 +889,27 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     toastTimer = setTimeout(() => toastEl.classList.remove("visible"), duration);
   }
 
+  function showCollarMemory() {
+    clearTimeout(toastTimer);
+    toastEl.classList.remove("visible");
+    clearMovementInput();
+    state.memoryOpen = true;
+    state.playing = false;
+    memoryEl.hidden = false;
+    if (document.pointerLockElement === canvas) document.exitPointerLock();
+    memoryContinueButton.focus();
+  }
+
+  function hideCollarMemory() {
+    if (memoryEl.hidden) return;
+    memoryEl.hidden = true;
+    state.memoryOpen = false;
+    if (!state.active || state.complete || !pauseScreen.hidden || !gate.hidden) return;
+    state.playing = true;
+    showToast("身份信息恢复：名称“米粒”。前方还有熟悉的气味。", 3800);
+    if (!isTouch && canvas.requestPointerLock) canvas.requestPointerLock();
+  }
+
   function updateObjective() {
     const objectives = ["找到记忆锚点：项圈", "开启感知并找到损坏的电缆", "穿过已经开启的维修舱门"];
     objectiveEl.textContent = objectives[Math.min(state.stage, 2)];
@@ -902,7 +939,7 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     updateObjective();
     tone(620, 0.18, "triangle", 0.05);
     setTimeout(() => tone(840, 0.3, "sine", 0.04), 100);
-    showToast("记忆恢复：那双手将你从纸箱抱起，并为你取名“米粒”", 5200);
+    showCollarMemory();
   }
 
   function finishCable() {
@@ -970,6 +1007,7 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
 
   function resetChapter() {
     state.complete = false;
+    state.memoryOpen = false;
     state.stage = 0;
     state.scent = false;
     state.holdingInteract = false;
@@ -987,6 +1025,7 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     player.velocityY = 0;
     player.grounded = true;
     collar.visible = true;
+    memoryEl.hidden = true;
     completeEl.hidden = true;
     progressEl.hidden = true;
     progressFill.style.width = "0%";
@@ -1225,6 +1264,7 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   animate();
 
   function enterPlay() {
+    clearMovementInput();
     ensureAudio();
     state.playing = true;
     gate.hidden = true;
@@ -1232,7 +1272,9 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   }
 
   function showResumeGate() {
-    if (!state.active || state.complete || !pauseScreen.hidden || isTouch) return;
+    if (!state.active || state.complete || state.memoryOpen || !pauseScreen.hidden || isTouch) return;
+    clearMovementInput();
+    state.playing = false;
     gate.hidden = false;
     gate.querySelector("h2").textContent = "继续探索";
     enterButton.textContent = "返回场景";
@@ -1251,7 +1293,7 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
       gate.querySelector("h2").textContent = "失联舱段";
       enterButton.textContent = "进入场景";
     } else {
-      keys.clear();
+      clearMovementInput();
       if (document.pointerLockElement === canvas) document.exitPointerLock();
     }
   }
@@ -1260,6 +1302,7 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   activateIfNeeded();
 
   enterButton.addEventListener("click", enterPlay);
+  memoryContinueButton.addEventListener("click", hideCollarMemory);
   replayButton.addEventListener("click", () => {
     resetChapter();
     state.playing = true;
@@ -1280,6 +1323,14 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
 
   window.addEventListener("keydown", event => {
     if (!state.active) return;
+    if (state.memoryOpen) {
+      if (["Escape", "Enter", "Space", "KeyE"].includes(event.code)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        hideCollarMemory();
+      }
+      return;
+    }
     const handled = ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "Space", "KeyQ", "KeyE", "ShiftLeft", "ShiftRight", "Escape"].includes(event.code);
     if (handled) {
       event.preventDefault();
@@ -1287,13 +1338,13 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     }
     if (event.repeat && ["Space", "KeyQ"].includes(event.code)) return;
     if (event.code === "Escape") {
-      keys.clear();
+      clearMovementInput();
       if (document.pointerLockElement === canvas) document.exitPointerLock();
       if (pauseScreen.hidden) pauseButton.click(); else resumeButton.click();
       return;
     }
     if (!pauseScreen.hidden) return;
-    keys.add(event.code);
+    if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ShiftLeft", "ShiftRight"].includes(event.code)) keys.add(event.code);
     if (event.code === "Space") jump();
     if (event.code === "KeyQ") toggleScent();
     if (event.code === "KeyE") startInteract();
@@ -1309,13 +1360,36 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     if (event.code === "KeyE") stopInteract();
   }, true);
 
+  function clearMovementInput() {
+    keys.clear();
+    player.moving = false;
+    state.holdingInteract = false;
+    state.scratchStartedAt = 0;
+    state.touchMove.x = 0;
+    state.touchMove.y = 0;
+    state.joystickPointer = null;
+    joystickKnob.style.transform = "translate(0,0)";
+  }
+
+  window.addEventListener("blur", () => {
+    if (!state.active) return;
+    clearMovementInput();
+    if (document.pointerLockElement === canvas) document.exitPointerLock();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && state.active) clearMovementInput();
+  });
+  pauseButton?.addEventListener("click", clearMovementInput);
+
   resumeButton?.addEventListener("click", () => {
+    clearMovementInput();
     state.playing = true;
     gate.hidden = true;
     if (!isTouch && canvas.requestPointerLock) canvas.requestPointerLock();
   });
   restartButton?.addEventListener("click", () => {
     resetChapter();
+    clearMovementInput();
     state.playing = true;
     gate.hidden = true;
     if (!isTouch && canvas.requestPointerLock) canvas.requestPointerLock();
