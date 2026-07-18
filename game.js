@@ -700,9 +700,9 @@
 
   function bindButtonAudio() {
     const soundKind = button => {
-      if (button.matches("#startButton,#departureStartButton,#chapter3dEnter,#storyNext,#puzzleClose,#chapter3dTouchInteract,.primary-button")) return "confirm";
+      if (button.matches("#startButton,#departureStartButton,#chapter3dEnter,#later3dEnter,#later3dMemoryContinue,#later3dNext,#storyNext,#puzzleClose,#chapter3dTouchInteract,#later3dInteract,.primary-button")) return "confirm";
       if (button.matches("#pauseButton,#resumeButton,#soundButton,#settingsButton,#skipCinematic,#skipDepartureVideo,#textPrologueSkip")) return "soft";
-      if (button.matches("#returnTitleButton,#restartButton,#replayButton,#chapter3dReplay")) return "back";
+      if (button.matches("#returnTitleButton,#restartButton,#replayButton,#chapter3dReplay,#later3dReplay")) return "back";
       return "tap";
     };
     document.addEventListener("pointerdown", event => {

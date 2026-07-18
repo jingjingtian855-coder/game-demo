@@ -16,6 +16,20 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
   root.innerHTML = `
     <canvas class="later3d-canvas" aria-label="星尾归航三维探索地图"></canvas>
     <div class="later3d-grade" aria-hidden="true"></div>
+    <section id="port2d" class="port2d" aria-label="第二章横版探索关卡" hidden>
+      <div class="port2d-sky"><i class="port2d-moon"></i><i class="port2d-rain rain-a"></i><i class="port2d-rain rain-b"></i><i class="port2d-rain rain-c"></i></div>
+      <div class="port2d-city" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      <div id="port2dWorld" class="port2d-world">
+        <div class="port2d-ground"><i></i></div>
+        <div class="port2d-platform platform-a"></div><div class="port2d-platform platform-b"></div><div class="port2d-platform platform-c"></div>
+        <div class="port2d-crane"><i></i><b></b></div>
+        <div id="port2dCat" class="port2d-cat" aria-label="米粒"><i class="cat-ear ear-left"></i><i class="cat-ear ear-right"></i><i class="cat-eye eye-left"></i><i class="cat-eye eye-right"></i><i class="cat-nose"></i><i class="cat-tail"></i></div>
+        <button id="port2dFeather0" class="port2d-feather" type="button" aria-label="第一束光羽"><i></i></button>
+        <button id="port2dFeather1" class="port2d-feather" type="button" aria-label="第二束光羽" hidden><i></i></button>
+        <button id="port2dFeather2" class="port2d-feather" type="button" aria-label="第三束光羽" hidden><i></i></button>
+      </div>
+      <p class="port2d-tip">左右移动 · 空格跳跃 · 碰到光羽即可收集</p>
+    </section>
     <div class="later3d-hud">
       <section class="later3d-objective"><small id="later3dKicker">第二章 · 百目港</small><strong id="later3dObjective"></strong><div id="later3dSteps" class="later3d-steps"><i></i><i></i><i></i></div></section>
       <div class="later3d-status"><span id="later3dMode">追踪模式</span><b id="later3dAlert"></b></div>
@@ -45,6 +59,9 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
 
   const $ = (selector) => root.querySelector(selector);
   const canvas = $(".later3d-canvas");
+  const port2d = $("#port2d");
+  const port2dCat = $("#port2dCat");
+  const port2dFeathers = [$("#port2dFeather0"), $("#port2dFeather1"), $("#port2dFeather2")];
   const gate = $("#later3dGate");
   const objectiveEl = $("#later3dObjective");
   const kickerEl = $("#later3dKicker");
@@ -64,6 +81,7 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
   const enterButton = $("#later3dEnter");
   const gateKicker = $("#later3dGateKicker");
   const gateTitle = $("#later3dGateTitle");
+  const gateHint = $("#later3dGateHint");
   const completeEl = $("#later3dComplete");
   const completeKicker = $("#later3dCompleteKicker");
   const completeTitle = $("#later3dCompleteTitle");
@@ -116,6 +134,12 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
   let solarMirror = null;
   let gardenVines = [];
   let targetLight = null;
+  let sceneCameraLamp = null;
+  let zeroAnchors = [];
+  let falseEchoes = [];
+  let timeGhosts = [];
+  let gloveObject = null;
+  let routeBeam = null;
 
   const player = {
     position: new THREE.Vector3(0, 1.13, 14), checkpoint: new THREE.Vector3(0, 1.13, 14), yaw: 0, pitch: 0,
@@ -123,11 +147,33 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
   };
   const state = {
     active: false, playing: false, chapter: 0, complete: false, memoryOpen: false, stage: 0, puzzleTurns: 0,
-    scent: false, nearby: null, alert: 0, touchMove: { x: 0, y: 0 }, stickPointer: null, lookPointer: null,
-    lookLast: { x: 0, y: 0 }, lastAlertReset: 0, pawReachUntil: 0
+    scent: false, nearby: null, alert: 0, gloveHold: 0, holdingGlove: false, touchMove: { x: 0, y: 0 }, stickPointer: null, lookPointer: null,
+    lookLast: { x: 0, y: 0 }, lastAlertReset: 0, pawReachUntil: 0, twoD: false, runner: false
+  };
+  const port = {
+    x: 6, y: 7, vx: 0, vy: 0, grounded: true, checkpoint: { x: 6, y: 7 },
+    width: 4.6, height: 7.2,
+    floor: 7,
+    platforms: [
+      { x: 22, y: 13, width: 16 },
+      { x: 45, y: 20, width: 16 },
+      { x: 71, y: 14, width: 17 }
+    ],
+    feathers: [
+      { x: 17, y: 12 },
+      { x: 52, y: 28 },
+      { x: 83, y: 21 }
+    ]
+  };
+  const runner = {
+    lanes: [-4.2, 0, 4.2], lane: 1, speed: 6.2, obstacles: [],
+    touchReady: true, keyReady: true, lastHit: 0, endZ: -56
   };
 
   const COLOR = { ink: 0x06101d, steel: 0x2d4252, trim: 0x607482, cyan: 0x20e5d4, pink: 0xff3f92, amber: 0xffc34b, orange: 0xd96a27, leaf: 0x7abf68, greenGlow: 0x9be968, danger: 0xff3155 };
+  const PORT = { ink: 0x0d1025, steel: 0x323454, trim: 0x70669e, violet: 0x9a7cff, blue: 0x4d8dff, amber: 0xffb654 };
+  const GARDEN = { ink: 0x14251f, frame: 0x53675a, gold: 0xffce70, aqua: 0x79e5cf, glass: 0x799e98 };
+  const ZERO = { void: 0x08070a, ivory: 0xfff2da, warm: 0xffdfad, glass: 0xf7ead0, cyan: 0x56f6ff, blue: 0x7ccfff, amber: 0xffc86a, red: 0xff4268 };
   const material = (color, metalness = .5, roughness = .55, emissive = 0x000000, intensity = 0) => new THREE.MeshStandardMaterial({ color, metalness, roughness, emissive, emissiveIntensity: intensity });
   const metal = material(COLOR.steel, .82, .42);
   const dark = material(COLOR.ink, .88, .35);
@@ -137,6 +183,21 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
   const amber = material(0xffd17a, .18, .28, COLOR.amber, 3.5);
   const leaf = material(0x8bbf6b, .08, .78, 0x3c6f34, .25);
   const vineMaterial = material(0x466c3b, .08, .82, 0x1b3e2b, .18);
+  const portMetal = material(PORT.steel, .86, .34);
+  const portDark = material(PORT.ink, .9, .3);
+  const portTrim = material(PORT.trim, .7, .36);
+  const portViolet = material(0xc3b2ff, .16, .24, PORT.violet, 3.6);
+  const portBlue = material(0x9fc4ff, .14, .22, PORT.blue, 3.4);
+  const portAmber = material(0xffd497, .13, .25, PORT.amber, 3.6);
+  const gardenFrame = material(GARDEN.frame, .55, .48);
+  const gardenGold = material(0xffd796, .12, .28, GARDEN.gold, 2.9);
+  const gardenAqua = material(0xa7fff0, .1, .3, GARDEN.aqua, 2.7);
+  const zeroFloor = material(ZERO.ivory, .52, .42, 0x3b2b16, .16);
+  const zeroFrame = material(0xded2bd, .78, .26, 0x2e2216, .1);
+  const zeroGlass = new THREE.MeshPhysicalMaterial({ color: ZERO.glass, metalness: .08, roughness: .18, transparent: true, opacity: .24, transmission: .18, side: THREE.DoubleSide });
+  const zeroCyan = material(0xdffffc, .12, .18, ZERO.cyan, 3.8);
+  const zeroAmber = material(0xffdf9c, .12, .26, ZERO.amber, 3.4);
+  const zeroRed = material(0xff9aa6, .08, .32, ZERO.red, 2.8);
 
   function seeded(seed) { let value = seed >>> 0; return () => ((value = (value * 1664525 + 1013904223) >>> 0) / 4294967296); }
   function furTexture() {
@@ -185,99 +246,349 @@ import energyCoreUrl from "./assets/models/ue5-source/SM_EnergyCore.glb";
   const leftPaw=buildPaw(-1), rightPaw=buildPaw(1); leftPaw.scale.setScalar(.56);rightPaw.scale.setScalar(.56); camera.layers.enable(1);
   const pawLight=new THREE.HemisphereLight(0xffddb4,0x4a190b,1.45);pawLight.layers.set(1);scene.add(pawLight);const pawKey=new THREE.PointLight(0xffad6c,3.2,4,2);pawKey.layers.set(1);pawKey.position.set(-.2,.3,.1);camera.add(pawKey);
 
-  function clearWorld() { while(world.children.length) world.remove(world.children[0]); colliders.length=0;platforms.length=0;scanners.length=0;guides.length=0;scentMarks.length=0;animated.length=0;waterLines=[];gardenVines=[];solarMirror=null;activeTarget=null;targetLight=null; }
-  function addBackground(stars = 600, tint = 0x243f70) { scene.background=new THREE.Color(0x020813);scene.fog=new THREE.FogExp2(tint,.022);const sky=new THREE.BufferGeometry();const pos=[];for(let i=0;i<stars;i++)pos.push((Math.random()-.5)*80,Math.random()*34-3,-48-Math.random()*100);sky.setAttribute("position",new THREE.Float32BufferAttribute(pos,3));world.add(new THREE.Points(sky,new THREE.PointsMaterial({color:0xbfeaff,size:.07,transparent:true,opacity:.86,depthWrite:false})));const hemi=new THREE.HemisphereLight(0x9ccfff,0x080410,2.25);world.add(hemi);const fill=new THREE.AmbientLight(0x7090a2,.75);world.add(fill);const lamp=new THREE.PointLight(0xa9dfff,15,12,2);camera.add(lamp); }
+  function clearWorld() { while(world.children.length) world.remove(world.children[0]); colliders.length=0;platforms.length=0;scanners.length=0;guides.length=0;scentMarks.length=0;animated.length=0;waterLines=[];gardenVines=[];zeroAnchors=[];falseEchoes=[];timeGhosts=[];solarMirror=null;gloveObject=null;routeBeam=null;activeTarget=null;targetLight=null; }
+  function addBackground(stars = 600, tint = 0x243f70, skyColor = 0xbfeaff, upperColor = 0x9ccfff) { scene.background=new THREE.Color(0x020813);scene.fog=new THREE.FogExp2(tint,.022);const sky=new THREE.BufferGeometry();const pos=[];for(let i=0;i<stars;i++)pos.push((Math.random()-.5)*80,Math.random()*34-3,-48-Math.random()*100);sky.setAttribute("position",new THREE.Float32BufferAttribute(pos,3));world.add(new THREE.Points(sky,new THREE.PointsMaterial({color:skyColor,size:.07,transparent:true,opacity:.86,depthWrite:false})));const hemi=new THREE.HemisphereLight(upperColor,0x080410,2.25);world.add(hemi);const fill=new THREE.AmbientLight(upperColor,.75);world.add(fill);if(sceneCameraLamp)camera.remove(sceneCameraLamp);sceneCameraLamp=new THREE.PointLight(upperColor,15,12,2);camera.add(sceneCameraLamp); }
   function loadProp(url, position, height, rotationY = 0) { loader.load(url, gltf=>{ if(!state.active)return;const model=gltf.scene;model.traverse(node=>{if(!node.isMesh)return;node.material=Array.isArray(node.material)?node.material.map(mat=>mat.clone()):node.material.clone();node.material.metalness=Math.min(.85,node.material.metalness??.6);node.material.roughness=Math.max(.35,node.material.roughness??.5);if(node.material.map)node.material.map.colorSpace=THREE.SRGBColorSpace;});const box=new THREE.Box3().setFromObject(model), size=box.getSize(new THREE.Vector3()), center=box.getCenter(new THREE.Vector3());model.position.set(-center.x,-box.min.y,-center.z);const holder=new THREE.Group();holder.position.set(...position);holder.rotation.y=rotationY;holder.scale.setScalar(height/Math.max(.01,size.y));holder.add(model);world.add(holder);},undefined,()=>{}); }
   function makeCargoCrate(x,z,w,d,h,color=metal,platform=false) { const group=new THREE.Group();group.position.set(x,0,z);world.add(group);addBox([w,h,d],[0,h/2,0],color,group);addBox([w+.04,.12,d+.04],[0,h*.67,0],dark,group);for(const px of [-1,1])for(const pz of [-1,1]){const pin=new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,h*.72,8),trim);pin.position.set(px*(w*.39),h*.5,pz*(d*.39));group.add(pin);} if(platform)addPlatform(x,z,w,d,h);else addCollider(x,z,w+.15,d+.15);return group; }
+  function makeSafeCargoSteps(x, z, direction = 1) { [0.24, .48, .72].forEach((height, index) => makeCargoCrate(x + direction * index * .78, z - index * .72, 1.18, 1.1, height, portMetal, true)); }
+  function makePortMachinery(x, z) { const group=new THREE.Group();group.position.set(x,0,z);world.add(group);addBox([2.2,.34,1.4],[0,.2,0],portDark,group);for(const side of [-1,1]){const fan=new THREE.Mesh(new THREE.TorusGeometry(.38,.08,10,24),portViolet);fan.rotation.y=Math.PI/2;fan.position.set(side*.7,.78,.55);group.add(fan);const hub=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,.12,12),portAmber);hub.rotation.z=Math.PI/2;hub.position.copy(fan.position);group.add(hub);}for(let i=0;i<3;i++)addBox([.12,1.45,.12],[-.75+i*.75,.87,-.48],portTrim,group);return group; }
   function makeDrone(position, color = COLOR.pink) { const drone=new THREE.Group();drone.position.set(...position);world.add(drone);const core=new THREE.Mesh(new THREE.SphereGeometry(.38,22,16),dark);core.scale.set(1.2,.7,1);drone.add(core);const eye=new THREE.Mesh(new THREE.SphereGeometry(.11,16,12),material(0xff8abf,.15,.25,color,4));eye.position.z=.37;drone.add(eye);for(let i=0;i<4;i++){const arm=new THREE.Mesh(new THREE.BoxGeometry(.6,.06,.1),trim);arm.rotation.y=i*Math.PI/2;drone.add(arm);const pod=new THREE.Mesh(new THREE.CylinderGeometry(.08,.1,.16,10),metal);pod.position.set(Math.cos(i*Math.PI/2)*.34,-.06,Math.sin(i*Math.PI/2)*.34);drone.add(pod);}const light=new THREE.PointLight(color,20,5,2);eye.add(light);const beam=new THREE.Mesh(new THREE.ConeGeometry(.86,7,20,1,true),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.08,depthWrite:false,side:THREE.DoubleSide}));beam.rotation.x=Math.PI/2;beam.position.z=3.5;drone.add(beam);scanners.push({drone,beam,origin:new THREE.Vector3(...position),phase:Math.random()*6.28});return drone; }
-  function makeFeather(position) { const group=new THREE.Group();group.position.set(...position);group.userData.baseY=position[1];const quill=new THREE.Mesh(new THREE.CylinderGeometry(.028,.018,.82,10),amber);quill.rotation.z=-.55;group.add(quill);const vaneMat=new THREE.MeshBasicMaterial({color:0xff72b6,transparent:true,opacity:.94,side:THREE.DoubleSide});for(const side of [-1,1]){const vane=new THREE.Mesh(new THREE.PlaneGeometry(.38,.72),vaneMat);vane.position.set(side*.105,.18,0);vane.rotation.z=side*.52;group.add(vane);}const glow=addGlow(position,0xffbf54,1.55);group.userData.glow=glow;world.add(group);animated.push({type:"feather",group});return group; }
+  function makeFeather(position) { const group=new THREE.Group();group.position.set(...position);group.userData.baseY=position[1];const quill=new THREE.Mesh(new THREE.CylinderGeometry(.028,.018,.82,10),portAmber);quill.rotation.z=-.55;group.add(quill);const vaneMat=new THREE.MeshBasicMaterial({color:0xbfa8ff,transparent:true,opacity:.94,side:THREE.DoubleSide});for(const side of [-1,1]){const vane=new THREE.Mesh(new THREE.PlaneGeometry(.38,.72),vaneMat);vane.position.set(side*.105,.18,0);vane.rotation.z=side*.52;group.add(vane);}const glow=addGlow(position,PORT.amber,1.55);group.userData.glow=glow;world.add(group);animated.push({type:"feather",group});return group; }
   function makeRootMark(x,z,color=COLOR.greenGlow) { const ring=new THREE.Mesh(new THREE.TorusGeometry(.34,.02,8,32),new THREE.MeshBasicMaterial({color,transparent:true,opacity:0,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.set(x,.02,z);world.add(ring);scentMarks.push(ring); }
 
   function buildPort() {
-    root.dataset.chapter="2";addBackground(720,0x14243d);world.add(new THREE.Mesh(new THREE.PlaneGeometry(25,78),new THREE.MeshStandardMaterial({color:0x273c50,metalness:.8,roughness:.42})));world.children[world.children.length-1].rotation.x=-Math.PI/2;world.children[world.children.length-1].position.z=-20;
-    const ceiling=addBox([25,.16,78],[0,8,-20],dark);
-    for(let z=15;z>-58;z-=6){ addBox([.22,6,5.7],[-12.2,3,z],z%12?metal:trim);addBox([.22,6,5.7],[12.2,3,z],z%12?metal:trim);addBox([25,.13,.14],[0,5.85,z-2.82],trim);const lampColor=z%12?COLOR.cyan:COLOR.pink;addBox([.12,.08,2.4],[-11.96,3.9,z],material(0xffffff,.1,.3,lampColor,3));addBox([.12,.08,2.4],[11.96,3.9,z],material(0xffffff,.1,.3,lampColor,3)); }
-    for(const x of [-10.8,10.8])for(const y of [4.7,5.05]){const tube=new THREE.Mesh(new THREE.CylinderGeometry(.12,.12,73,10),dark);tube.rotation.x=Math.PI/2;tube.position.set(x,y,-20);world.add(tube);}
-    [[-5,5,2.4,2.5,1.2,false],[5.6,1,2.8,2.4,1.4,false],[-7,-7,3.4,2.5,1.35,true],[3.2,-12,3,2.8,1.55,true],[-3.5,-22,4,3,1.6,false],[6,-29,3.1,2.4,2.25,true],[-5,-37,3.3,3.3,1.2,true],[2,-44,3.4,3,1.6,true]].forEach(data=>makeCargoCrate(...data));
-    const crane=new THREE.Group();crane.position.set(0,0,-19);world.add(crane);addBox([.32,6,.32],[0,3,0],trim,crane);addBox([12,.24,.34],[0,5.6,0],metal,crane);addBox([.12,3,.12],[5.1,4.1,0],dark,crane);const hook=new THREE.Mesh(new THREE.TorusGeometry(.24,.07,10,18,Math.PI),amber);hook.position.set(5.1,2.45,0);crane.add(hook);animated.push({type:"crane",group:crane});
-    addSign("百目港 · 漂浮货运层",[-11.92,3.1,10],4.6,"#20e5d4",Math.PI/2);addSign("扫描区",[11.92,3.1,-25],3.2,"#ff3f92",-Math.PI/2);
-    [[-5.9,3,.2],[7.2,-15.7,1.75],[-2.2,-42.2,2.85]].forEach((p,index)=>guides.push(makeFeather(p)));
-    guides.forEach((guide,index)=>guide.visible=index===0);activeTarget=guides[0];targetLight=addArcLight(activeTarget.position.toArray(),COLOR.amber,56,7);
-    makeDrone([4.5,2.7,-9],COLOR.pink);makeDrone([-5.2,2.6,-31],COLOR.cyan);makeDrone([2.8,3.2,-47],COLOR.pink);
-    for(let z=5;z>-46;z-=4)makeRootMark(Math.sin(z)*2.4,z,COLOR.amber);
-    [[-8,2.3,7],[8,2.4,-10],[-8,2.8,-28],[8,2.7,-46]].forEach((p,i)=>addArcLight(p,i%2?COLOR.pink:COLOR.cyan,42,10));
+    root.dataset.chapter="2";addBackground(720,0x211538,0xd3c7ff,0xa99aff);world.add(new THREE.Mesh(new THREE.PlaneGeometry(25,78),new THREE.MeshStandardMaterial({color:0x17192f,metalness:.88,roughness:.28})));world.children[world.children.length-1].rotation.x=-Math.PI/2;world.children[world.children.length-1].position.z=-20;
+    const ceiling=addBox([25,.16,78],[0,8,-20],portDark);
+    for(let z=15;z>-58;z-=6){ addBox([.22,6,5.7],[-12.2,3,z],z%12?portMetal:portTrim);addBox([.22,6,5.7],[12.2,3,z],z%12?portMetal:portTrim);addBox([25,.13,.14],[0,5.85,z-2.82],portTrim);const lampColor=z%12?PORT.violet:PORT.blue;addBox([.12,.08,2.4],[-11.96,3.9,z],material(0xffffff,.1,.3,lampColor,3.4));addBox([.12,.08,2.4],[11.96,3.9,z],material(0xffffff,.1,.3,lampColor,3.4)); }
+    for(const x of [-10.8,10.8])for(const y of [4.7,5.05]){const tube=new THREE.Mesh(new THREE.CylinderGeometry(.12,.12,73,10),portDark);tube.rotation.x=Math.PI/2;tube.position.set(x,y,-20);world.add(tube);}
+    [[-5,5,2.4,2.5,1.2,false],[5.6,1,2.8,2.4,1.4,false],[-7,-7,3.4,2.5,.66,true],[3.2,-12,3,2.8,.72,true],[-3.5,-22,4,3,1.6,false],[6,-29,3.1,2.4,.70,true],[-5,-37,3.3,3.3,.62,true],[2,-44,3.4,3,.72,true]].forEach(data=>makeCargoCrate(data[0],data[1],data[2],data[3],data[4],data[5]?portMetal:portTrim,data[5]));
+    makeSafeCargoSteps(-8.6,-4,1);makeSafeCargoSteps(4.1,-18,-1);makeSafeCargoSteps(-6.8,-33,1);makePortMachinery(-8.2,-19);makePortMachinery(8.1,-40);
+    const crane=new THREE.Group();crane.position.set(0,0,-19);world.add(crane);addBox([.32,6,.32],[0,3,0],portTrim,crane);addBox([12,.24,.34],[0,5.6,0],portMetal,crane);addBox([.12,3,.12],[5.1,4.1,0],portDark,crane);const hook=new THREE.Mesh(new THREE.TorusGeometry(.24,.07,10,18,Math.PI),portAmber);hook.position.set(5.1,2.45,0);crane.add(hook);animated.push({type:"crane",group:crane});
+    addSign("百目港 · 漂浮货运层",[-11.92,3.1,10],4.6,"#9a7cff",Math.PI/2);addSign("扫描区",[11.92,3.1,-25],3.2,"#ffb654",-Math.PI/2);
+    [[-5.9,1.32,.2],[5.5,-15.7,1.24],[2,-43.4,1.42]].forEach((p,index)=>guides.push(makeFeather(p)));
+    guides.forEach((guide,index)=>guide.visible=index===0);activeTarget=guides[0];targetLight=addArcLight(activeTarget.position.toArray(),PORT.amber,56,7);
+    makeDrone([4.5,2.7,-9],PORT.violet);makeDrone([-5.2,2.6,-31],PORT.blue);makeDrone([2.8,3.2,-47],PORT.violet);
+    for(let z=5;z>-46;z-=4)makeRootMark(Math.sin(z)*2.4,z,PORT.amber);
+    [[-8,2.3,7],[8,2.4,-10],[-8,2.8,-28],[8,2.7,-46]].forEach((p,i)=>addArcLight(p,i%2?PORT.violet:PORT.blue,42,10));
+  }
+  function makeRunnerBarrier(lane, z, low = false) {
+    const group = new THREE.Group();
+    group.position.set(runner.lanes[lane], 0, z); world.add(group);
+    const height = low ? .78 : 1.15;
+    addBox([2.35, height, .62], [0, height / 2, 0], portMetal, group);
+    addBox([2.48, .12, .72], [0, height + .04, 0], portAmber, group);
+    for (const side of [-1, 1]) {
+      addBox([.12, height + .38, .12], [side * 1.03, (height + .38) / 2, 0], portTrim, group);
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(.11, 14, 10), portViolet);
+      lamp.position.set(side * .92, height + .27, .05); group.add(lamp);
+    }
+    runner.obstacles.push({ lane, z, height });
+  }
+  function buildRunnerWorld() {
+    root.dataset.chapter = "2";
+    runner.lane = 1; runner.obstacles.length = 0; runner.touchReady = true; runner.keyReady = true; runner.lastHit = 0;
+    addBackground(1500, 0x111d4d, 0xc7d7ff, 0x7d9dff); scene.fog = new THREE.FogExp2(0x050916, .012);
+    const track = addBox([14.2, .24, 88], [0, -.12, -29], portDark);
+    track.material = new THREE.MeshStandardMaterial({ color: 0x111a36, metalness: .88, roughness: .3 });
+    for (let z = 14; z > -71; z -= 3.6) {
+      addBox([13.8, .045, .08], [0, .03, z], portTrim);
+      for (const x of [-2.1, 2.1]) addBox([.07, .05, 2.1], [x, .07, z - 1.05], z % 7 ? portViolet : portAmber);
+      for (const x of [-6.65, 6.65]) addBox([.13, .46, 3.55], [x, .28, z - 1.75], portMetal);
+    }
+    for (const z of [8, -13, -34, -55]) {
+      for (const x of [-6.3, 6.3]) addBox([.22, 5.4, .24], [x, 2.7, z], portTrim);
+      addBox([12.8, .18, .28], [0, 5.18, z], portMetal);
+      addBox([.18, .1, 6.3], [-3.1, 4.7, z], portViolet);
+      addBox([.18, .1, 6.3], [3.1, 4.7, z], portBlue);
+    }
+    const planet = new THREE.Mesh(new THREE.SphereGeometry(9, 48, 32), new THREE.MeshStandardMaterial({ color: 0x334687, metalness: .12, roughness: .7, emissive: 0x101c5d, emissiveIntensity: 1.5 }));
+    planet.position.set(18, 10, -43); world.add(planet);
+    const planetHalo = new THREE.Mesh(new THREE.TorusGeometry(11.5, .08, 12, 72), new THREE.MeshBasicMaterial({ color: 0x768cff, transparent: true, opacity: .52 }));
+    planetHalo.position.copy(planet.position); planetHalo.rotation.x = Math.PI / 2.55; world.add(planetHalo);
+    for (let i = 0; i < 19; i++) {
+      const asteroid = new THREE.Mesh(new THREE.IcosahedronGeometry(.28 + (i % 4) * .14, 1), portMetal);
+      asteroid.position.set((i % 2 ? -1 : 1) * (9 + (i % 5) * 2.8), 1.6 + (i % 6) * 1.45, 7 - i * 4.1);
+      asteroid.rotation.set(i * .37, i * .61, i * .22); world.add(asteroid);
+    }
+    addSign("百目港 · 外环逃逸航道", [0, 3.1, 10.6], 5.8, "#ffcf72");
+    [[0, 3.1], [1, -17.1], [2, -38.1]].forEach(([lane, z], index) => guides.push(makeFeather([runner.lanes[lane], 1.3, z])));
+    guides.forEach((guide, index) => guide.visible = index === 0);
+    activeTarget = guides[0]; targetLight = addArcLight(activeTarget.position.toArray(), PORT.amber, 58, 7);
+    makeRunnerBarrier(0, -7); makeRunnerBarrier(1, -25); makeRunnerBarrier(2, -31, true);
+    [[-9, 2.2, 5], [9, 2.8, -15], [-9, 2.6, -38], [9, 3.1, -56]].forEach((p, i) => addArcLight(p, i % 2 ? PORT.violet : PORT.blue, 45, 12));
+  }
+  function changeRunnerLane(direction) {
+    if (!state.runner || !state.playing || state.complete || !pauseScreen.hidden) return;
+    const next = THREE.MathUtils.clamp(runner.lane + direction, 0, runner.lanes.length - 1);
+    if (next === runner.lane) return;
+    runner.lane = next; tone(260 + next * 80, .06, "square", .018);
+  }
+  function updateRunner(dt) {
+    if (!state.playing || state.complete || !pauseScreen.hidden) { player.moving = false; return; }
+    const leftHeld = keys.has("KeyA") || keys.has("ArrowLeft");
+    const rightHeld = keys.has("KeyD") || keys.has("ArrowRight");
+    if (!leftHeld && !rightHeld) runner.keyReady = true;
+    if (runner.keyReady && leftHeld !== rightHeld) { changeRunnerLane(rightHeld ? 1 : -1); runner.keyReady = false; }
+    const touch = state.touchMove.x;
+    if (Math.abs(touch) < .28) runner.touchReady = true;
+    if (runner.touchReady && Math.abs(touch) > .68) { changeRunnerLane(touch > 0 ? 1 : -1); runner.touchReady = false; }
+    player.position.z -= runner.speed * dt;
+    player.position.x = THREE.MathUtils.damp(player.position.x, runner.lanes[runner.lane], 16, dt);
+    player.moving = true; player.step += dt * runner.speed * 2.7;
+    const previousFoot = player.position.y - 1.13;
+    player.velocityY -= 10.8 * dt; player.position.y += player.velocityY * dt;
+    const foot = player.position.y - 1.13;
+    if (player.velocityY <= 0 && foot <= 0 && previousFoot >= -.05) { player.position.y = 1.13; player.velocityY = 0; player.grounded = true; } else player.grounded = false;
+    const now = performance.now();
+    for (const obstacle of runner.obstacles) {
+      if (Math.abs(player.position.z - obstacle.z) < .68 && Math.abs(player.position.x - runner.lanes[obstacle.lane]) < 1.16 && player.position.y < 1.88 && now - runner.lastHit > 900) {
+        runner.lastHit = now; resetCheckpoint("撞上了航道障碍，已返回最近的光羽位置。"); return;
+      }
+    }
+    if (activeTarget && player.position.distanceTo(activeTarget.position) < 1.5) captureFeather();
+    if (activeTarget && player.position.z < activeTarget.position.z - 1.9 && now - runner.lastHit > 900) {
+      runner.lastHit = now; resetCheckpoint("光羽掠过了前方跑道，已返回最近检查点。"); return;
+    }
+    if (player.position.z < runner.endZ && state.stage < 3 && now - runner.lastHit > 900) {
+      runner.lastHit = now; resetCheckpoint("航道仍在延伸，先追上前方的光羽。");
+    }
+  }
+  function renderPort2D() {
+    port2dCat.style.setProperty("--x", `${port.x}%`);
+    port2dCat.style.setProperty("--y", `${port.y}%`);
+    port2dCat.classList.toggle("is-running", Math.abs(port.vx) > 1);
+    port2dCat.classList.toggle("is-airborne", !port.grounded);
+    port2dCat.classList.toggle("facing-left", port.vx < -1);
+    port.feathers.forEach((feather, index) => {
+      const node = port2dFeathers[index];
+      node.style.left = `${feather.x}%`;
+      node.style.bottom = `${feather.y}%`;
+      node.hidden = index !== state.stage;
+    });
+  }
+  function buildPort2D() {
+    state.twoD = true;
+    root.classList.add("two-d-mode");
+    canvas.hidden = true;
+    port2d.hidden = false;
+    port.x = 6; port.y = port.floor; port.vx = 0; port.vy = 0; port.grounded = true;
+    port.checkpoint = { x: 6, y: port.floor };
+    port2dCat.classList.remove("is-running", "is-airborne", "facing-left");
+    renderPort2D();
+  }
+  function collectPortFeather() {
+    if (!state.twoD || !state.playing || state.stage > 2) return;
+    const index = state.stage;
+    state.pawReachUntil = performance.now() + 420;
+    tone(660, .12, "triangle", .05); setTimeout(() => tone(880, .22, "sine", .04), 80);
+    state.stage++;
+    if (state.stage < 3) {
+      port.checkpoint = { x: port.x, y: port.y };
+      showToast(state.stage === 1 ? "第一束光羽飞向上方平台了，按空格跳上去。" : "最后一束光羽在右侧，继续向前。", 2600);
+      updateObjective(); renderPort2D();
+      return;
+    }
+    renderPort2D(); updateObjective(); showMemory();
+  }
+  function updatePort2D(dt) {
+    if (!state.playing || state.complete || !pauseScreen.hidden) return;
+    const input = (keys.has("KeyD") || keys.has("ArrowRight") ? 1 : 0) - (keys.has("KeyA") || keys.has("ArrowLeft") ? 1 : 0) + state.touchMove.x;
+    const direction = Math.abs(input) > .12 ? Math.sign(input) : 0;
+    port.vx = THREE.MathUtils.damp(port.vx, direction * 31, direction ? 16 : 12, dt);
+    port.x = THREE.MathUtils.clamp(port.x + port.vx * dt, 1, 95);
+    const previousY = port.y;
+    port.vy -= 92 * dt;
+    port.y += port.vy * dt;
+    let landing = port.floor;
+    const catLeft = port.x - port.width * .5;
+    const catRight = port.x + port.width * .5;
+    for (const platform of port.platforms) {
+      const platformLeft = platform.x - platform.width * .5;
+      const platformRight = platform.x + platform.width * .5;
+      if (catRight > platformLeft && catLeft < platformRight && previousY >= platform.y - .1 && port.y <= platform.y && port.vy <= 0) landing = Math.max(landing, platform.y);
+    }
+    if (port.y <= landing) { port.y = landing; port.vy = 0; port.grounded = true; } else port.grounded = false;
+    if (state.stage < 3) {
+      const feather = port.feathers[state.stage];
+      const dx = port.x - feather.x;
+      const dy = (port.y + port.height * .45) - feather.y;
+      if (Math.hypot(dx, dy) < 6.2) collectPortFeather();
+    }
+    renderPort2D();
+  }
+  function port2DJump() {
+    if (!state.playing || !port.grounded || !pauseScreen.hidden) return;
+    port.vy = 39;
+    port.grounded = false;
+    tone(188, .1, "triangle", .026);
   }
   function makePlant(position, scale=1, hue=0) { const plant=new THREE.Group();plant.position.set(...position);world.add(plant);const stalk=new THREE.Mesh(new THREE.CylinderGeometry(.055,.08,1.2*scale,10),vineMaterial);stalk.position.y=.6*scale;plant.add(stalk);for(let i=0;i<7;i++){const leafMesh=new THREE.Mesh(new THREE.SphereGeometry(.18*scale,18,12),leaf);leafMesh.scale.set(1.35,.28,.68);leafMesh.position.set(Math.sin(i*2.4)*.18*scale,.42*scale+i*.11*scale,Math.cos(i*2.4)*.18*scale);leafMesh.rotation.z=Math.sin(i*2.4)*.7;leafMesh.rotation.y=i*1.8;plant.add(leafMesh);}plant.userData.base=plant.scale.clone();gardenVines.push(plant);return plant; }
   function makeConsole(x,z,color,label) { const group=new THREE.Group();group.position.set(x,0,z);world.add(group);addBox([1.2,1.4,.7],[0,.7,0],dark,group);addBox([.8,.56,.08],[0,1.02,.39],material(0xffffff,.1,.25,color,3),group);for(let i=0;i<4;i++){const dot=new THREE.Mesh(new THREE.SphereGeometry(.045,10,8),material(0xffffff,.1,.2,color,3));dot.position.set(-.25+i*.17,.93,.45);group.add(dot);}const sign=addSign(label,[x,1.85,z],1.6,"#fff7df",0);sign.rotation.x=0;return group; }
   function buildGarden() {
-    root.dataset.chapter="3";addBackground(520,0x15372f);scene.fog=new THREE.FogExp2(0x102d27,.018);const floor=new THREE.Mesh(new THREE.CircleGeometry(17,80),new THREE.MeshStandardMaterial({color:0x1e3b3b,metalness:.55,roughness:.55}));floor.rotation.x=-Math.PI/2;floor.scale.set(1,2.8,1);floor.position.z=-20;world.add(floor);
-    for(let z=16;z>-58;z-=6){const ring=new THREE.Mesh(new THREE.TorusGeometry(12.4,.12,12,46),trim);ring.rotation.x=Math.PI/2;ring.position.z=z;world.add(ring);const upper=new THREE.Mesh(new THREE.TorusGeometry(12.4,.09,12,46),dark);upper.rotation.x=Math.PI/2;upper.position.set(0,7,z);world.add(upper);for(const x of [-12,12])addBox([.18,7,.18],[x,3.5,z],metal);}
+    root.dataset.chapter="3";addBackground(520,0x293522,0xffdf9c,0xffd499);scene.fog=new THREE.FogExp2(0x263826,.016);const floor=new THREE.Mesh(new THREE.CircleGeometry(17,80),new THREE.MeshStandardMaterial({color:0x26352d,metalness:.38,roughness:.62}));floor.rotation.x=-Math.PI/2;floor.scale.set(1,2.8,1);floor.position.z=-20;world.add(floor);
+    const glassMaterial=new THREE.MeshPhysicalMaterial({color:GARDEN.glass,metalness:.12,roughness:.2,transparent:true,opacity:.13,transmission:.1,side:THREE.DoubleSide});
+    for(let z=16;z>-58;z-=6){const ring=new THREE.Mesh(new THREE.TorusGeometry(12.4,.12,12,46),gardenFrame);ring.rotation.x=Math.PI/2;ring.position.z=z;world.add(ring);const upper=new THREE.Mesh(new THREE.TorusGeometry(12.4,.09,12,46),gardenGold);upper.rotation.x=Math.PI/2;upper.position.set(0,7,z);world.add(upper);const glass=new THREE.Mesh(new THREE.CylinderGeometry(12.32,12.32,6,46,1,true),glassMaterial);glass.position.set(0,3.5,z);world.add(glass);for(const x of [-12,12])addBox([.18,7,.18],[x,3.5,z],gardenFrame);}
     for(let i=0;i<26;i++){const angle=i*2.399;const radius=4+(i%4)*1.7;makePlant([Math.cos(angle)*radius,0,8-i*2.5+Math.sin(angle)*2],.65+(i%3)*.22);}
-    for(const z of [10,-5,-21,-38,-53]){const lamp=addArcLight([0,5.6,z],COLOR.greenGlow,55,12);animated.push({type:"gardenLight",light:lamp,phase:z});}
-    const podRing=new THREE.Group();podRing.position.set(-7,0,-28);world.add(podRing);for(let i=0;i<4;i++){const pod=new THREE.Mesh(new THREE.CylinderGeometry(.8,.95,2.8,16),new THREE.MeshPhysicalMaterial({color:0x4e7163,metalness:.28,roughness:.36,transparent:true,opacity:.72,transmission:.12}));pod.position.set(Math.cos(i*Math.PI/2)*2,1.45,Math.sin(i*Math.PI/2)*2);podRing.add(pod);makePlant([podRing.position.x+Math.cos(i*Math.PI/2)*2,pod.position.y-.85,podRing.position.z+Math.sin(i*Math.PI/2)*2],.52);}
-    const water=makeConsole(-6,4,COLOR.cyan,"水循环");const mirror=makeConsole(6,-17,COLOR.amber,"折光镜");const vent=makeConsole(0,-39,COLOR.greenGlow,"气流阀");
+    for(const z of [10,-5,-21,-38,-53]){const lamp=addArcLight([0,5.6,z],z%2?GARDEN.aqua:GARDEN.gold,55,12);animated.push({type:"gardenLight",light:lamp,phase:z});}
+    const podRing=new THREE.Group();podRing.position.set(-7,0,-28);world.add(podRing);for(let i=0;i<4;i++){const pod=new THREE.Mesh(new THREE.CylinderGeometry(.8,.95,2.8,16),new THREE.MeshPhysicalMaterial({color:0x5d7865,metalness:.2,roughness:.34,transparent:true,opacity:.68,transmission:.18}));pod.position.set(Math.cos(i*Math.PI/2)*2,1.45,Math.sin(i*Math.PI/2)*2);podRing.add(pod);makePlant([podRing.position.x+Math.cos(i*Math.PI/2)*2,pod.position.y-.85,podRing.position.z+Math.sin(i*Math.PI/2)*2],.52);}
+    for(let i=0;i<14;i++){const x=-10+(i%7)*3.2,z=12-Math.floor(i/7)*44;const hanging=addTube([[x,6.7,z],[x+Math.sin(i)*.35,5.2,z-.35],[x+Math.cos(i)*.5,4.25,z-.55]],.055,vineMaterial);hanging.rotation.y=i*.4;const bud=addGlow([x+Math.cos(i)*.5,4.18,z-.55],i%2?GARDEN.gold:GARDEN.aqua,.36);animated.push({type:"bud",sprite:bud,phase:i});}
+    const water=makeConsole(-6,4,GARDEN.aqua,"水循环");const mirror=makeConsole(6,-17,GARDEN.gold,"折光镜");const vent=makeConsole(0,-39,GARDEN.aqua,"气流阀");
     water.userData.kind="water";mirror.userData.kind="mirror";vent.userData.kind="vent";guides.push(water,mirror,vent);
-    solarMirror=new THREE.Group();solarMirror.position.set(6,2.25,-17);world.add(solarMirror);const disc=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,.08,32),new THREE.MeshPhysicalMaterial({color:0xa4c5ca,metalness:.9,roughness:.15,clearcoat:.65}));disc.rotation.x=Math.PI/2;solarMirror.add(disc);const rim=new THREE.Mesh(new THREE.TorusGeometry(1.12,.08,12,32),amber);rim.rotation.x=Math.PI/2;solarMirror.add(rim);const beam=new THREE.Mesh(new THREE.CylinderGeometry(.11,.38,10,12,true),new THREE.MeshBasicMaterial({color:COLOR.amber,transparent:true,opacity:.05,depthWrite:false}));beam.position.set(-2.4,.2,-4.5);beam.rotation.x=Math.PI/2;solarMirror.add(beam);solarMirror.userData.beam=beam;
-    [[-6,4,0,0,-9,0],[0,-9,0,6,-17,0],[6,-17,0,0,-28,0],[0,-28,0,0,-39,0]].forEach(points=>{const line=addTube([[points[0],.14,points[1]],[points[2],.14,points[3]],[points[4],.14,points[5]]],.085,material(0x31514e,.3,.5,COLOR.cyan,0));waterLines.push(line);});
-    for(let z=7;z>-43;z-=3.5)makeRootMark(Math.sin(z*.4)*3,z,COLOR.greenGlow);
+    solarMirror=new THREE.Group();solarMirror.position.set(6,2.25,-17);world.add(solarMirror);const disc=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,.08,32),new THREE.MeshPhysicalMaterial({color:0xb2c9c0,metalness:.88,roughness:.12,clearcoat:.72}));disc.rotation.x=Math.PI/2;solarMirror.add(disc);const rim=new THREE.Mesh(new THREE.TorusGeometry(1.12,.08,12,32),gardenGold);rim.rotation.x=Math.PI/2;solarMirror.add(rim);const beam=new THREE.Mesh(new THREE.CylinderGeometry(.11,.38,10,12,true),new THREE.MeshBasicMaterial({color:GARDEN.gold,transparent:true,opacity:.05,depthWrite:false}));beam.position.set(-2.4,.2,-4.5);beam.rotation.x=Math.PI/2;solarMirror.add(beam);solarMirror.userData.beam=beam;
+    [[-6,4,0,0,-9,0],[0,-9,0,6,-17,0],[6,-17,0,0,-28,0],[0,-28,0,0,-39,0]].forEach(points=>{const line=addTube([[points[0],.14,points[1]],[points[2],.14,points[3]],[points[4],.14,points[5]]],.085,material(0x42675b,.3,.5,GARDEN.aqua,0));waterLines.push(line);});
+    for(let z=7;z>-43;z-=3.5)makeRootMark(Math.sin(z*.4)*3,z,GARDEN.aqua);
     loadProp(ecologyPodUrl,[-9,0,-45],3.1,.28);loadProp(energyCoreUrl,[1.2,.15,-39],.8,.4);loadProp(bulbRobotUrl,[2.7,.05,-48],1.35,-.5);
   }
 
+  function makeZeroRoom(x,y,z,rotation=.0,ghost=false) {
+    const group=new THREE.Group();group.position.set(x,y,z);group.rotation.set(Math.sin(x+z)*.12,rotation,Math.cos(x-z)*.08);world.add(group);
+    const wall=ghost?zeroGlass:zeroFrame, floor=ghost?zeroGlass:zeroFloor;
+    addBox([4.8,.2,3.6],[0,0,0],floor,group);
+    addBox([4.9,.12,.16],[0,1.9,-1.72],wall,group);
+    addBox([.16,2.9,3.4],[-2.36,1.35,0],wall,group);
+    addBox([.16,2.9,3.4],[2.36,1.35,0],wall,group);
+    const screen=new THREE.Mesh(new THREE.PlaneGeometry(2.3,1.1),new THREE.MeshBasicMaterial({color:ghost?ZERO.cyan:ZERO.warm,transparent:true,opacity:ghost ? .22 : .72,side:THREE.DoubleSide}));
+    screen.position.set(0,1.55,1.75);screen.rotation.y=Math.PI;group.add(screen);
+    animated.push({type:ghost?"zeroGhostRoom":"zeroRoom",group,phase:x+z});
+    return group;
+  }
+  function makeZeroCatEcho(position,scale=.8,collar=false,kitten=false) {
+    const mat=new THREE.MeshBasicMaterial({color:0xffb66c,transparent:true,opacity:kitten ? .34 : .46,depthWrite:false});
+    const group=new THREE.Group();group.position.set(...position);group.scale.setScalar(scale*(kitten ? .66 : 1));world.add(group);
+    const body=new THREE.Mesh(new THREE.SphereGeometry(.42,20,14),mat);body.scale.set(1.45,.72,.82);body.position.y=.52;group.add(body);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(.28,18,12),mat);head.position.set(-.48,.78,.08);group.add(head);
+    const tail=new THREE.Mesh(new THREE.TorusGeometry(.32,.035,8,20,Math.PI*1.2),mat);tail.position.set(.56,.68,-.06);tail.rotation.set(.2,-.6,.2);group.add(tail);
+    if(collar){const ring=new THREE.Mesh(new THREE.TorusGeometry(.18,.018,8,24),zeroCyan);ring.position.copy(head.position);ring.position.y-=.08;ring.rotation.x=Math.PI/2;group.add(ring);}
+    timeGhosts.push(group);animated.push({type:"zeroCat",group,phase:position[0]+position[2]});
+    return group;
+  }
+  function makeFalseOwner(position,rotation=0,label="错误记忆") {
+    const mat=new THREE.MeshBasicMaterial({color:ZERO.red,transparent:true,opacity:.38,depthWrite:false});
+    const group=new THREE.Group();group.position.set(...position);group.rotation.y=rotation;world.add(group);
+    const body=new THREE.Mesh(new THREE.CapsuleGeometry(.28,1.5,8,18),mat);body.position.y=1.25;group.add(body);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(.24,18,12),mat);head.position.y=2.25;group.add(head);
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(1.15,.1,.1),mat);arm.position.set(.45,1.64,.18);arm.rotation.z=-.36;group.add(arm);
+    const hand=new THREE.Mesh(new THREE.SphereGeometry(.12,14,10),zeroRed);hand.position.set(1.02,1.44,.22);group.add(hand);
+    const warning=new THREE.Mesh(new THREE.TorusGeometry(.92,.025,8,42),new THREE.MeshBasicMaterial({color:ZERO.red,transparent:true,opacity:.5,depthWrite:false}));warning.rotation.x=Math.PI/2;warning.position.y=.08;group.add(warning);
+    addSign(label,[position[0],2.72,position[2]],1.65,"#ff4268",rotation);
+    falseEchoes.push(group);animated.push({type:"falseOwner",group,phase:position[0]-position[2]});
+    return group;
+  }
+  function makeZeroAnchor(kind,position,color,label) {
+    const group=new THREE.Group();group.position.set(...position);world.add(group);
+    const mat=material(0xffffff,.12,.2,color,3.4);
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(.68,.04,10,36),mat);ring.rotation.x=Math.PI/2;group.add(ring);
+    const core=new THREE.Mesh(new THREE.SphereGeometry(.22,22,14),mat);core.position.y=.08;group.add(core);
+    if(kind==="feather"){const feather=new THREE.Mesh(new THREE.PlaneGeometry(.48,1.12),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.78,side:THREE.DoubleSide}));feather.position.y=.56;feather.rotation.z=-.45;group.add(feather);}
+    if(kind==="treat"){addBox([.72,.12,.4],[0,.22,0],zeroAmber,group,[0,.2,.08]);}
+    if(kind==="wreck"){addBox([1.3,.18,.7],[0,.3,0],portDark,group,[.08,.35,-.1]);addBox([.78,.06,.72],[.18,.52,.03],zeroCyan,group,[.2,.35,0]);}
+    addSign(label,[position[0],position[1]+1.05,position[2]],2.05,"#fff7df");
+    const light=addArcLight(position,color,40,7);
+    const anchor={kind,group,position:group.position,light};zeroAnchors.push(anchor);animated.push({type:"zeroAnchor",group,phase:zeroAnchors.length});
+    return anchor;
+  }
+  function makeZeroGlove() {
+    const group=new THREE.Group();group.position.set(0,3.2,-50);world.add(group);
+    const palm=new THREE.Mesh(new THREE.SphereGeometry(.46,28,18),new THREE.MeshPhysicalMaterial({color:0xf5e8d0,metalness:.24,roughness:.45,clearcoat:.2}));palm.scale.set(.78,.3,1.08);group.add(palm);
+    for(let i=0;i<5;i++){const finger=new THREE.Mesh(new THREE.CapsuleGeometry(.07,.58,8,14),palm.material);finger.position.set((i-2)*.16,.08,-.45-Math.abs(i-2)*.025);finger.rotation.x=.22;group.add(finger);}
+    const chip=new THREE.Mesh(new THREE.BoxGeometry(.34,.045,.22),zeroCyan);chip.position.set(.2,.18,.08);group.add(chip);
+    const palmRing=new THREE.Mesh(new THREE.TorusGeometry(.72,.025,10,44),new THREE.MeshBasicMaterial({color:ZERO.cyan,transparent:true,opacity:.72,depthWrite:false}));palmRing.rotation.x=Math.PI/2;group.add(palmRing);
+    addArcLight(group.position.toArray(),ZERO.cyan,70,10);
+    for(let i=0;i<4;i++){const ring=new THREE.Mesh(new THREE.TorusGeometry(1.15+i*.42,.022,8,64),new THREE.MeshBasicMaterial({color:i%2?ZERO.warm:ZERO.cyan,transparent:true,opacity:.25,depthWrite:false}));ring.rotation.set(Math.PI/2+i*.2,i*.32,0);group.add(ring);animated.push({type:"gloveRing",group:ring,phase:i});}
+    animated.push({type:"zeroGlove",group,phase:0});return group;
+  }
+  function buildZeroPointTower() {
+    root.dataset.chapter="3";addBackground(1200,0x4a3827,0xfff1d2,0xffdfb6);scene.fog=new THREE.FogExp2(0x4b3a2d,.012);
+    const floor=new THREE.Mesh(new THREE.CylinderGeometry(16,16,.28,88),zeroFloor);floor.position.y=-.14;floor.position.z=-20;world.add(floor);
+    for(const radius of [4.8,9.2,14.4]){const ring=new THREE.Mesh(new THREE.TorusGeometry(radius,.035,8,72),zeroAmber);ring.rotation.x=Math.PI/2;ring.position.set(0,.03,-20);world.add(ring);}
+    [[0,-6,5.6,24,0],[0,-31,5.4,27,0],[-7,-18,14,4,.18],[7,-34,13,4,-.16]].forEach(([x,z,w,d,r])=>{const group=new THREE.Group();group.position.set(x,0,z);group.rotation.y=r;world.add(group);addBox([w,.2,d],[0,0,0],zeroFloor,group);addBox([w,.18,.12],[0,.28,-d/2+.12],zeroFrame,group);addBox([w,.18,.12],[0,.28,d/2-.12],zeroFrame,group);});
+    for(let z=12;z>-55;z-=8){const arch=new THREE.Mesh(new THREE.TorusGeometry(6.2,.08,12,48),zeroFrame);arch.position.set(0,3.2,z);arch.rotation.x=Math.PI/2;world.add(arch);const lamp=addArcLight([Math.sin(z)*4,3.7,z],z%16?ZERO.warm:ZERO.cyan,45,10);animated.push({type:"zeroLamp",light:lamp,phase:z});}
+    makeZeroRoom(-11,3.4,-8,.4,true);makeZeroRoom(10,4.5,-24,-.35,true);makeZeroRoom(-8,2.8,-42,.75,false);makeZeroRoom(9,3.2,-47,-.7,false);
+    const wreck=new THREE.Group();wreck.position.set(0,0,-39);wreck.rotation.set(.1,.28,-.08);world.add(wreck);addBox([5.8,.36,3.6],[0,.35,0],portDark,wreck);addBox([.18,2.4,3.1],[-2.6,1.3,0],portTrim,wreck);addBox([.18,2.1,2.8],[2.6,1.15,0],zeroGlass,wreck);addBox([4.2,.08,.16],[0,1.75,-1.55],zeroRed,wreck);addSign("远汐号 · 分离舱段",[0,2.7,-39],3.2,"#ffcf72");
+    zeroAnchors=[
+      makeZeroAnchor("collar",[-7,1.05,-4],ZERO.cyan,"项圈蓝色脉冲"),
+      makeZeroAnchor("feather",[7,1.05,-14],ZERO.amber,"逗猫棒反光"),
+      makeZeroAnchor("treat",[0,1.05,-26],0xfff0aa,"猫条气味"),
+      makeZeroAnchor("wreck",[0,1.05,-38],ZERO.blue,"远汐号残骸")
+    ];
+    waterLines=[
+      addTube([[-7,.18,-4],[-2,.18,-9],[7,.18,-14]],.055,material(0x8b7d62,.25,.42,ZERO.cyan,.05)),
+      addTube([[7,.18,-14],[4,.18,-21],[0,.18,-26]],.055,material(0x8b7d62,.25,.42,ZERO.amber,.05)),
+      addTube([[0,.18,-26],[-2,.18,-34],[0,.18,-38]],.055,material(0x8b7d62,.25,.42,ZERO.warm,.05)),
+      addTube([[0,.18,-38],[0,1.5,-44],[0,3.2,-50]],.06,material(0x8b7d62,.2,.38,ZERO.cyan,.05))
+    ];
+    for(let i=0;i<18;i++){const z=-7-i*1.55;makeRootMark(Math.sin(i*.8)*2.2,z,0xfff0aa);}
+    makeFalseOwner([-9,0,-12],.55,"不要追逐");makeFalseOwner([9,0,-24],-.55,"错误离别");makeFalseOwner([-6,0,-33],.2,"红色警告");
+    makeZeroCatEcho([-4,.02,1],.82,true,false);makeZeroCatEcho([4,.02,-9],.62,false,true);makeZeroCatEcho([-3,.02,-18],.82,false,false);makeZeroCatEcho([5,.02,-31],.82,true,false);
+    gloveObject=makeZeroGlove();gloveObject.visible=false;
+    routeBeam=new THREE.Mesh(new THREE.CylinderGeometry(.12,.5,22,18,true),new THREE.MeshBasicMaterial({color:ZERO.cyan,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));routeBeam.position.set(0,6.8,-59);routeBeam.rotation.x=.38;world.add(routeBeam);
+    addSign("零点塔 · 时空观测核心",[0,4.2,6],5.4,"#fff7df");
+  }
+
   function buildChapter(chapter) {
-    clearWorld(); state.chapter=chapter;state.stage=0;state.puzzleTurns=0;state.complete=false;state.memoryOpen=false;state.scent=false;state.nearby=null;state.alert=0;player.position.set(0,1.13,14);player.checkpoint.copy(player.position);player.yaw=0;player.pitch=0;player.velocityY=0;player.grounded=true;
-    if(chapter===2)buildPort();else buildGarden();
+    clearWorld(); state.chapter=chapter;state.stage=0;state.puzzleTurns=0;state.complete=false;state.memoryOpen=false;state.scent=false;state.nearby=null;state.alert=0;state.gloveHold=0;state.holdingGlove=false;player.position.set(0,1.13,14);player.checkpoint.copy(player.position);player.yaw=0;player.pitch=0;player.velocityY=0;player.grounded=true;
+    state.twoD = false; state.runner = chapter === 2;
+    root.classList.remove("two-d-mode"); canvas.hidden=false; port2d.hidden=true;
+    if(chapter===2) buildRunnerWorld(); else buildZeroPointTower();
     updateCopy();updateWorldState();
   }
-  function chapterConfig() { return state.chapter===2 ? { kicker:"第二章 · 百目港", gateKicker:"第二章 · 记忆锚点：逗猫棒", gateTitle:"霓虹漂流港", objective:["追逐逗猫棒留下的光羽","穿过货箱与升降机，继续追踪","避开扫描眼，到达顶层货台"], memory:{k:"逗猫棒记忆 · 02",t:"一束追不上的光",p:"彩色羽毛在走廊尽头晃了一下。你扑过去，主人总会在最后一刻把它抬高，又在你快要失望时把它放回爪边。那时你只记得追逐和笑声。现在，逗猫棒的铃铛重新响起：原来那个一直陪你玩的人，从来没有离开过你的记忆。"}, complete:{k:"第二章完成",t:"追逐没有终点",p:"逗猫棒留下的铃声穿过港口噪音，点亮了下一处异常坐标。更温暖的气味，正从星环温室的方向传来。",next:"前往第三章"} } : { kicker:"第三章 · 眠海花园", gateKicker:"第三章 · 记忆锚点：猫条", gateTitle:"星环生态温室", objective:["开启感知，定位失效的水循环","校准三次折光镜，让阳光抵达温室","释放气流，唤醒沉睡的生态舱"], memory:{k:"猫条记忆 · 03",t:"家的味道",p:"熟悉的包装声轻轻响起。有人蹲在你面前，把猫条挤在指尖，耐心等你靠近；窗外再陌生，掌心的温度都像一个可以回去的地方。你终于明白，家并不只是一个坐标，而是有人愿意一次次等你靠近。"}, complete:{k:"第三章完成",t:"温室重新呼吸",p:"水、光与气流重新流过眠海花园。生命信号汇入航图，米粒找到了通往零点塔的下一段坐标。",next:"返回标题"} };
+  function chapterConfig() { return state.chapter===2 ? { kicker:"第二章 · 百目港", gateKicker:"第二章 · 记忆锚点：逗猫棒", gateTitle:"外环逃逸航道", objective:["切到左侧跑道，追上第一束光羽","回到中间跑道，避开前方障碍","切到右侧并跳过能量栏，接住最后光羽"], memory:{k:"逗猫棒记忆 · 02",t:"一束追不上的光",p:"彩色羽毛在走廊尽头晃了一下。你扑过去，主人总会在最后一刻把它抬高，又在你快要失望时把它放回爪边。那时你只记得追逐和笑声。现在，逗猫棒的铃铛重新响起：原来那个一直陪你玩的人，从来没有离开过你的记忆。"}, complete:{k:"第二章完成",t:"追逐没有终点",p:"逗猫棒留下的铃声穿过港口噪音，点亮了下一处异常坐标。更温暖的气味，正从星环温室的方向传来。",next:"前往第三章"} } : { kicker:"第三章 · 零点塔", gateKicker:"第三章 · 记忆锚点：导航手套", gateTitle:"零点塔观测站", objective:["根据项圈蓝色脉冲识别真实声音","扑抓逗猫棒反光，击碎错误影像","开启感知，沿猫条气味找到稳定空间","读取远汐号残骸中的事故影像","顶住乱流，长按导航手套掌心"], memory:{k:"导航手套记忆 · 04",t:"不是不要你",p:"完整事故画面重新亮起。林澈把米粒放进动物休眠舱，将项圈信号接入救生系统，又把逗猫棒和猫条放进救生袋。米粒抓挠透明舱门时，林澈把手掌贴在同一个位置。\n“不是不要你。是要你活下去。”\n救生舱弹射前，破损舱门扯落了林澈的导航手套。米粒只看见那只手突然离开，于是把离别误记成了被放开。最后一段声音留在项圈里：往亮的地方走。我会找到你。"}, complete:{k:"归航信标启动",t:"林澈仍在发送定位",p:"灯泡读取手套里的身份芯片，确认信号来自遥远星域：林澈。它不是过去留下的录音，而是在固定周期内持续发送的求救定位。米粒依次放入项圈、逗猫棒、猫条包装和主人手套，四段时间坐标合成完整航线。青色航线从零点塔延伸向星海：归航并不是回到原点，是终于想起自己为什么出发。",next:"游戏结束 · 返回标题"} };
   }
-  function updateCopy() { const data=chapterConfig();kickerEl.textContent=data.kicker;gateKicker.textContent=data.gateKicker;gateTitle.textContent=data.gateTitle;completeKicker.textContent=data.complete.k;completeTitle.textContent=data.complete.t;completeText.textContent=data.complete.p;nextButton.textContent=data.complete.next; }
-  function updateObjective() { const data=chapterConfig();let text=data.objective[Math.min(state.stage,2)];if(state.chapter===3&&state.stage===1)text=`校准折光镜 ${state.puzzleTurns} / 3`;
-    objectiveEl.textContent=text;[...stepsEl.children].forEach((dot,index)=>{dot.classList.toggle("done",index<state.stage);dot.classList.toggle("active",index===Math.min(state.stage,2));}); }
-  function updateWorldState() { updateObjective();root.classList.toggle("scent-on",state.scent);modeEl.textContent=state.chapter===2?"追踪模式":state.scent?"感知模式 · 根系可见":"感知模式 · 关闭";if(state.chapter===3){waterLines.forEach((line,index)=>{const active=index<state.stage;line.material.emissiveIntensity=active?2.8:.08;line.material.color.setHex(active?0x9afff2:0x31514e);});gardenVines.forEach((plant,index)=>plant.scale.copy(plant.userData.base).multiplyScalar(1+(state.stage*.08)+(index%3===0?state.stage*.04:0)));if(solarMirror){solarMirror.rotation.y=state.puzzleTurns*Math.PI/6;solarMirror.userData.beam.material.opacity=state.puzzleTurns===3?.25:.05;}} }
+  function updateCopy() { const data=chapterConfig();kickerEl.textContent=data.kicker;gateKicker.textContent=data.gateKicker;gateTitle.textContent=data.gateTitle;gateHint.textContent=state.runner?"自动前进 · A D 或左右方向键切换跑道 · 空格跳跃":state.chapter===3?"开放式地图 · 依靠气味与记忆锚点前进 · E 互动 · Q 感知":"鼠标控制视角 · W A S D 移动 · 空格跳跃 · Q 感知 · E 互动";completeKicker.textContent=data.complete.k;completeTitle.textContent=data.complete.t;completeText.textContent=data.complete.p;nextButton.textContent=data.complete.next; }
+  function updateObjective() { const data=chapterConfig();while(stepsEl.children.length<data.objective.length)stepsEl.appendChild(document.createElement("i"));while(stepsEl.children.length>data.objective.length)stepsEl.lastElementChild.remove();let text=data.objective[Math.min(state.stage,data.objective.length-1)];if(state.chapter===3&&state.stage===4&&state.gloveHold>0)text=`长按导航手套掌心 ${Math.round(Math.min(1,state.gloveHold/2.25)*100)}%`;
+    objectiveEl.textContent=text;[...stepsEl.children].forEach((dot,index)=>{dot.classList.toggle("done",index<state.stage);dot.classList.toggle("active",index===Math.min(state.stage,data.objective.length-1));}); }
+  function updateWorldState() { updateObjective();root.classList.toggle("scent-on",state.scent);modeEl.textContent=state.runner?"自动奔跑":state.chapter===3?(state.scent?"零点塔 · 真实气味":"零点塔 · 时序失效"):state.scent?"感知模式 · 根系可见":"感知模式 · 关闭";if(state.chapter===3){waterLines.forEach((line,index)=>{const active=index<state.stage;line.material.emissiveIntensity=active?2.4:.08;line.material.color.setHex(active?ZERO.cyan:0x8b7d62);});zeroAnchors.forEach((anchor,index)=>{const active=index<=state.stage;anchor.group.scale.setScalar(active?1.08:1);anchor.light.intensity=active?54:22;});if(gloveObject)gloveObject.visible=state.stage>=4;if(routeBeam)routeBeam.material.opacity=state.complete ? .38 : state.stage>=4 ? .08 : 0;} }
   function showToast(text,duration=2800){clearTimeout(toastTimer);toastEl.textContent=text;toastEl.classList.add("visible");toastTimer=setTimeout(()=>toastEl.classList.remove("visible"),duration);}
   function ensureAudio(){if(!audioContext)audioContext=new (window.AudioContext||window.webkitAudioContext)();if(audioContext.state==="suspended")audioContext.resume();}
   function tone(freq,duration=.12,type="sine",gain=.035){try{ensureAudio();const o=audioContext.createOscillator(),g=audioContext.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(gain,audioContext.currentTime);g.gain.exponentialRampToValueAtTime(.0001,audioContext.currentTime+duration);o.connect(g).connect(audioContext.destination);o.start();o.stop(audioContext.currentTime+duration);}catch(_){}}
-  function setScent(force){if(!state.playing||state.complete)return;state.scent=typeof force==="boolean"?force:!state.scent;updateWorldState();tone(state.scent?550:210,.18,"sine",.025);if(state.chapter===3&&state.scent)showToast("气味感知展开：发光根系会连接到失效设施。",2200);}
+  function setScent(force){if(state.twoD||state.runner||!state.playing||state.complete)return;state.scent=typeof force==="boolean"?force:!state.scent;updateWorldState();tone(state.scent?550:210,.18,"sine",.025);if(state.chapter===3&&state.scent)showToast("猫条包装的暖白气味浮出来了，稳定空间正在显形。",2400);}
   function showMemory(){const data=chapterConfig().memory;state.memoryOpen=true;state.playing=false;clearInput();memoryKicker.textContent=data.k;memoryTitle.textContent=data.t;memoryText.textContent=data.p;memoryEl.hidden=false;if(document.pointerLockElement===canvas)document.exitPointerLock();memoryContinue.focus();}
   function hideMemory(){if(memoryEl.hidden)return;memoryEl.hidden=true;state.memoryOpen=false;finishChapter();}
-  function captureFeather(){const previous=activeTarget;previous.visible=false;previous.userData.glow.visible=false;state.pawReachUntil=performance.now()+720;tone(650,.15,"triangle",.05);setTimeout(()=>tone(880,.28,"sine",.04),90);if(state.stage<2){state.stage++;activeTarget=guides[state.stage];activeTarget.visible=true;activeTarget.userData.glow.visible=true;targetLight.position.copy(activeTarget.position);player.checkpoint.copy(player.position);updateObjective();showToast(state.stage===1?"光羽跃上了集装箱高台。跟上它。":"铃铛声穿过扫描区，光羽又飞远了。",2600);}else{state.stage=3;updateObjective();showMemory();}}
-  function solveGarden(){if(!state.scent){showToast("先按 Q 展开感知，跟随发光根系确认设施位置。",2200);return;}state.pawReachUntil=performance.now()+620;if(state.stage===0){state.stage=1;player.checkpoint.copy(player.position);showToast("水循环已恢复。折光镜正在等待校准。",2600);tone(450,.18,"sine",.05);}else if(state.stage===1){state.puzzleTurns++;tone(360+state.puzzleTurns*120,.16,"triangle",.04);if(state.puzzleTurns===3){state.stage=2;player.checkpoint.copy(player.position);showToast("光束抵达培养区。去打开最后的气流阀。",2800);}else showToast(`折光镜已转动 ${state.puzzleTurns} / 3`,1300);}else if(state.stage===2){state.stage=3;tone(520,.18,"sine",.05);setTimeout(()=>tone(740,.32,"sine",.045),120);showMemory();}updateWorldState();}
-  function interact(){if(!state.playing||!state.nearby)return;if(state.chapter===2)captureFeather();else solveGarden();}
-  function finishChapter(){state.complete=true;state.playing=false;completeEl.hidden=false;if(document.pointerLockElement===canvas)document.exitPointerLock();tone(430,.22,"sine",.05);setTimeout(()=>tone(660,.42,"triangle",.04),160);}
-  function updateNearby(){state.nearby=null;let text="";if(state.chapter===2&&activeTarget&&player.position.distanceTo(activeTarget.position)<2.1){state.nearby="feather";text="接住逗猫棒光羽";} if(state.chapter===3){const targets=[new THREE.Vector3(-6,1.1,4),new THREE.Vector3(6,1.1,-17),new THREE.Vector3(0,1.1,-39)];const target=targets[Math.min(state.stage,2)];if(state.stage<3&&player.position.distanceTo(target)<2.25){state.nearby="garden";text=!state.scent?"开启感知定位设施":state.stage===1?`转动折光镜 · ${state.puzzleTurns} / 3`:state.stage===0?"激活水循环":"释放温室气流";}}promptEl.hidden=!state.nearby;if(state.nearby){promptEl.querySelector("span").textContent=text;touchInteract.classList.add("ready");}else touchInteract.classList.remove("ready");}
-  function isBlocked(x,z){const r=.31;if(x<-11.72+r||x>11.72-r||z>17||z<-58)return true;for(const box of colliders){const cx=Math.max(box.minX,Math.min(x,box.maxX)),cz=Math.max(box.minZ,Math.min(z,box.maxZ));if((x-cx)**2+(z-cz)**2<r*r)return true;}return false;}
+  function captureFeather(){if(state.twoD){collectPortFeather();return;}const previous=activeTarget;previous.visible=false;previous.userData.glow.visible=false;state.pawReachUntil=performance.now()+720;tone(650,.15,"triangle",.05);setTimeout(()=>tone(880,.28,"sine",.04),90);if(state.stage<2){state.stage++;activeTarget=guides[state.stage];activeTarget.visible=true;activeTarget.userData.glow.visible=true;targetLight.position.copy(activeTarget.position);player.checkpoint.copy(player.position);updateObjective();showToast(state.runner?(state.stage===1?"前方中央跑道亮起光羽，避开障碍后追上它。":"最后一束光羽在右侧，跳过能量栏！"):(state.stage===1?"光羽跃上了集装箱高台。跟上它。":"铃铛声穿过扫描区，光羽又飞远了。"),2600);}else{state.stage=3;updateObjective();showMemory();}}
+  function startGloveHold(){if(state.stage!==4||state.nearby!=="glove")return;state.holdingGlove=true;progressEl.hidden=false;progressText.textContent="正在贴近导航手套掌心";progressFill.style.width=`${Math.min(100,state.gloveHold/2.25*100)}%`;}
+  function stopGloveHold(){state.holdingGlove=false;if(state.chapter===3&&state.stage===4&&state.gloveHold<2.25)progressEl.hidden=true;}
+  function solveGarden(){state.pawReachUntil=performance.now()+620;if(state.stage===0){state.stage=1;player.checkpoint.copy(player.position);showToast("项圈蓝色脉冲确认了真实声音。不要追逐红色影像。",3000);tone(540,.18,"sine",.05);}else if(state.stage===1){state.stage=2;player.checkpoint.copy(player.position);showToast("逗猫棒反光击碎了一层虚假离别，残影开始退开。",3000);tone(720,.16,"triangle",.045);setTimeout(()=>tone(880,.22,"sine",.035),90);}else if(state.stage===2){if(!state.scent){showToast("先按 Q 展开感知，让猫条气味指出稳定空间。",2300);return;}state.stage=3;player.checkpoint.copy(player.position);showToast("猫条气味稳定了重复走廊，观测核心的道路打开了。",3000);tone(480,.2,"sine",.05);}else if(state.stage===3){state.stage=4;state.gloveHold=0;player.checkpoint.copy(player.position);showToast("事故前后的影像重叠在远汐号残骸里。上方出现损坏的导航手套。",3600);tone(380,.2,"triangle",.045);setTimeout(()=>tone(620,.28,"sine",.04),140);}else if(state.stage===4){startGloveHold();}updateWorldState();}
+  function interact(){if(!state.playing)return;if(state.twoD){showToast("靠近发光羽毛即可自动收集。",1300);return;}if(state.runner){showToast("航道会自动前进：切换跑道避障，按空格跳过低栏。",1800);return;}if(!state.nearby)return;if(state.chapter===2)captureFeather();else solveGarden();}
+  function finishChapter(){state.complete=true;state.playing=false;state.holdingGlove=false;progressEl.hidden=true;completeEl.hidden=false;updateWorldState();if(document.pointerLockElement===canvas)document.exitPointerLock();tone(430,.22,"sine",.05);setTimeout(()=>tone(660,.42,"triangle",.04),160);}
+  function updateNearby(){state.nearby=null;let text="";if(state.twoD||state.runner){promptEl.hidden=true;touchInteract.classList.remove("ready");return;}if(state.chapter===2&&activeTarget&&player.position.distanceTo(activeTarget.position)<2.1){state.nearby="feather";text="接住逗猫棒光羽";} if(state.chapter===3){const target=zeroAnchors[Math.min(state.stage,3)]?.position;if(state.stage<4&&target&&player.position.distanceTo(target)<2.45){state.nearby="zero";text=state.stage===0?"聆听项圈蓝色脉冲":state.stage===1?"扑抓逗猫棒反光":state.stage===2?(state.scent?"沿猫条气味稳定空间":"按 Q 展开猫条气味"):"读取远汐号事故影像";}else if(state.stage===4&&gloveObject&&player.position.distanceTo(gloveObject.position)<3.1){state.nearby="glove";text="长按导航手套掌心";}}promptEl.hidden=!state.nearby;if(state.nearby){promptEl.querySelector("span").textContent=text;promptEl.querySelector("kbd").textContent=state.nearby==="glove"?"按住 E":"按 E";touchInteract.classList.add("ready");}else touchInteract.classList.remove("ready");}
+  function isBlocked(x,z){const r=.31,limitX=state.chapter===3?15.6:11.72,limitZ=state.chapter===3?-61:-58;if(x<-limitX+r||x>limitX-r||z>17||z<limitZ)return true;for(const box of colliders){const cx=Math.max(box.minX,Math.min(x,box.maxX)),cz=Math.max(box.minZ,Math.min(z,box.maxZ));if((x-cx)**2+(z-cz)**2<r*r)return true;}const footHeight=player.position.y-1.13;for(const platform of platforms){if(x>platform.minX-r&&x<platform.maxX+r&&z>platform.minZ-r&&z<platform.maxZ+r&&footHeight<platform.height-.04)return true;}return false;}
   function groundAt(x,z){let height=0;for(const platform of platforms)if(x>platform.minX&&x<platform.maxX&&z>platform.minZ&&z<platform.maxZ)height=Math.max(height,platform.height);return height;}
   function resetCheckpoint(message){player.position.copy(player.checkpoint);player.velocityY=0;player.grounded=true;state.alert=0;root.classList.add("hit");setTimeout(()=>root.classList.remove("hit"),500);showToast(message);tone(90,.35,"sawtooth",.045);}
-  function jump(){if(!state.playing||!player.grounded||!pauseScreen.hidden)return;player.velocityY=4.5;player.grounded=false;tone(175,.1,"triangle",.024);}
-  function updateMovement(dt){if(!state.playing||state.complete||!pauseScreen.hidden){player.moving=false;return;}const f=(keys.has("KeyW")||keys.has("ArrowUp")?1:0)-(keys.has("KeyS")||keys.has("ArrowDown")?1:0)-state.touchMove.y;const s=(keys.has("KeyD")?1:0)-(keys.has("KeyA")?1:0)+state.touchMove.x;const length=Math.hypot(f,s);if(length>.08){const forward=f/Math.max(1,length),side=s/Math.max(1,length),speed=keys.has("ShiftLeft")||keys.has("ShiftRight")?6:4.1;const dx=(Math.sin(player.yaw)*forward+Math.cos(player.yaw)*side)*speed*dt,dz=(-Math.cos(player.yaw)*forward+Math.sin(player.yaw)*side)*speed*dt;if(!isBlocked(player.position.x+dx,player.position.z))player.position.x+=dx;if(!isBlocked(player.position.x,player.position.z+dz))player.position.z+=dz;player.moving=true;player.step+=dt*speed*2.4;}else player.moving=false;player.velocityY-=10.8*dt;player.position.y+=player.velocityY*dt;const terrain=groundAt(player.position.x,player.position.z);if(player.position.y<=terrain+1.13){player.position.y=terrain+1.13;player.velocityY=0;player.grounded=true;}else player.grounded=false;if(player.position.y<-2)resetCheckpoint("跌回了下层货道，已返回最近检查点。");}
-  function updateScanners(dt,time){if(state.chapter!==2||!state.playing)return;let detected=false;for(const scanner of scanners){scanner.drone.position.x=scanner.origin.x+Math.sin(time*.72+scanner.phase)*4.3;scanner.drone.position.y=scanner.origin.y+Math.sin(time*2+scanner.phase)*.16;scanner.drone.rotation.y=Math.sin(time*.72+scanner.phase)>0?Math.PI:0;scanner.beam.material.opacity=.045+Math.abs(Math.sin(time*2+scanner.phase))*.07;const dist=scanner.drone.position.distanceTo(player.position);if(dist<5.4&&player.position.y<scanner.drone.position.y+.8)detected=true;}state.alert=THREE.MathUtils.clamp(state.alert+(detected?32:-22)*dt,0,100);alertEl.style.width=`${state.alert}%`;alertEl.parentElement.classList.toggle("visible",state.alert>2);if(state.alert>99&&performance.now()-state.lastAlertReset>1200){state.lastAlertReset=performance.now();resetCheckpoint("扫描眼锁定了米粒，已返回最近的安全货台。");}}
-  function updateWorld(dt,time){if(state.chapter===2){guides.forEach((guide,index)=>{guide.rotation.y+=dt*(1.2+index*.1);if(index===state.stage)guide.position.y=guide.userData.baseY+Math.sin(time*3+index)*.12;if(guide.userData.glow){guide.userData.glow.position.copy(guide.position);guide.userData.glow.scale.setScalar(1.2+Math.sin(time*4+index)*.16);}});if(targetLight&&activeTarget){targetLight.position.copy(activeTarget.position);targetLight.intensity=50+Math.sin(time*5)*10;}}
-    if(state.chapter===3){scentMarks.forEach((mark,index)=>mark.material.opacity=THREE.MathUtils.lerp(mark.material.opacity,state.scent?(.3+Math.max(0,Math.sin(time*3-index*.45))*.58):0,Math.min(1,dt*7)));gardenVines.forEach((plant,index)=>plant.rotation.y=Math.sin(time*.6+index)*.04);}
-    animated.forEach(item=>{if(item.type==="crane")item.group.position.y=Math.sin(time*.7)*.08;if(item.type==="gardenLight")item.light.intensity=45+Math.sin(time*1.5+item.phase)*10;});updateScanners(dt,time);
+  function jump(){if(state.twoD){port2DJump();return;}if(!state.playing||!player.grounded||!pauseScreen.hidden)return;player.velocityY=5.45;player.grounded=false;tone(175,.1,"triangle",.024);}
+  function updateMovement(dt){if(state.twoD){updatePort2D(dt);return;}if(!state.playing||state.complete||!pauseScreen.hidden){player.moving=false;return;}const f=(keys.has("KeyW")||keys.has("ArrowUp")?1:0)-(keys.has("KeyS")||keys.has("ArrowDown")?1:0)-state.touchMove.y;const s=(keys.has("KeyD")?1:0)-(keys.has("KeyA")?1:0)+state.touchMove.x;const length=Math.hypot(f,s);if(length>.08){const forward=f/Math.max(1,length),side=s/Math.max(1,length),speed=keys.has("ShiftLeft")||keys.has("ShiftRight")?6:4.1;const dx=(Math.sin(player.yaw)*forward+Math.cos(player.yaw)*side)*speed*dt,dz=(-Math.cos(player.yaw)*forward+Math.sin(player.yaw)*side)*speed*dt;if(!isBlocked(player.position.x+dx,player.position.z))player.position.x+=dx;if(!isBlocked(player.position.x,player.position.z+dz))player.position.z+=dz;player.moving=true;player.step+=dt*speed*2.4;}else player.moving=false;const previousFoot=player.position.y-1.13;player.velocityY-=10.8*dt;player.position.y+=player.velocityY*dt;const terrain=groundAt(player.position.x,player.position.z),foot=player.position.y-1.13;if(player.velocityY<=0&&foot<=terrain&&previousFoot>=terrain-.05){player.position.y=terrain+1.13;player.velocityY=0;player.grounded=true;}else player.grounded=false;if(player.position.y<-2)resetCheckpoint("跌回了下层货道，已返回最近检查点。");}
+  const updateFreeMovement = updateMovement;
+  updateMovement = function updateMovementWithRunner(dt){ if(state.runner){ updateRunner(dt); return; } updateFreeMovement(dt); };
+  function updateScanners(dt,time){if(state.chapter!==2||state.twoD||state.runner||!state.playing)return;let detected=false;for(const scanner of scanners){scanner.drone.position.x=scanner.origin.x+Math.sin(time*.72+scanner.phase)*4.3;scanner.drone.position.y=scanner.origin.y+Math.sin(time*2+scanner.phase)*.16;scanner.drone.rotation.y=Math.sin(time*.72+scanner.phase)>0?Math.PI:0;scanner.beam.material.opacity=.045+Math.abs(Math.sin(time*2+scanner.phase))*.07;const dist=scanner.drone.position.distanceTo(player.position);if(dist<5.4&&player.position.y<scanner.drone.position.y+.8)detected=true;}state.alert=THREE.MathUtils.clamp(state.alert+(detected?32:-22)*dt,0,100);alertEl.style.width=`${state.alert}%`;alertEl.parentElement.classList.toggle("visible",state.alert>2);if(state.alert>99&&performance.now()-state.lastAlertReset>1200){state.lastAlertReset=performance.now();resetCheckpoint("扫描眼锁定了米粒，已返回最近的安全货台。");}}
+  function updateGloveHold(dt){if(state.chapter!==3||state.stage!==4)return;if(gloveObject&&player.position.z<-43.5&&!state.holdingGlove)player.position.z+=dt*(1.15+Math.max(0,-45-player.position.z)*.18);if(state.holdingGlove&&state.nearby==="glove"){state.gloveHold=Math.min(2.25,state.gloveHold+dt);progressFill.style.width=`${state.gloveHold/2.25*100}%`;updateObjective();if(state.gloveHold>=2.25){state.stage=5;state.holdingGlove=false;progressEl.hidden=true;tone(520,.22,"sine",.05);setTimeout(()=>tone(840,.42,"triangle",.045),130);updateWorldState();showMemory();}}else if(!state.holdingGlove&&state.gloveHold>0&&state.gloveHold<2.25){state.gloveHold=Math.max(0,state.gloveHold-dt*.35);}}
+  function updateWorld(dt,time){if(state.chapter===2&&!state.twoD){guides.forEach((guide,index)=>{guide.rotation.y+=dt*(1.2+index*.1);if(index===state.stage)guide.position.y=guide.userData.baseY+Math.sin(time*3+index)*.12;if(guide.userData.glow){guide.userData.glow.position.copy(guide.position);guide.userData.glow.scale.setScalar(1.2+Math.sin(time*4+index)*.16);}});if(targetLight&&activeTarget){targetLight.position.copy(activeTarget.position);targetLight.intensity=50+Math.sin(time*5)*10;}}
+    if(state.chapter===3){scentMarks.forEach((mark,index)=>mark.material.opacity=THREE.MathUtils.lerp(mark.material.opacity,state.scent?(.25+Math.max(0,Math.sin(time*3-index*.45))*.62):0,Math.min(1,dt*7)));falseEchoes.forEach(echo=>{echo.children.forEach(child=>{if(child.material&&"opacity"in child.material)child.material.opacity=.26+Math.sin(time*2.2+echo.position.x)*.14;});if(state.playing&&state.stage<3&&player.position.distanceTo(echo.position)<2.25)resetCheckpoint("追上错误记忆后，走廊重新回到了原点。");});timeGhosts.forEach((ghost,index)=>{ghost.position.y=.02+Math.sin(time*1.4+index)*.05;ghost.rotation.y=Math.sin(time*.8+index)*.18;});updateGloveHold(dt);}
+    animated.forEach(item=>{if(item.type==="crane")item.group.position.y=Math.sin(time*.7)*.08;if(item.type==="gardenLight"||item.type==="zeroLamp")item.light.intensity=45+Math.sin(time*1.5+item.phase)*10;if(item.type==="bud"){const size=.32+Math.sin(time*2+item.phase)*.055;item.sprite.scale.setScalar(size);}if(item.type==="zeroAnchor")item.group.position.y=.05+Math.sin(time*2+item.phase)*.06;if(item.type==="zeroGhostRoom")item.group.position.y+=Math.sin(time*.8+item.phase)*dt*.05;if(item.type==="zeroGlove")item.group.rotation.y+=dt*.55;if(item.type==="gloveRing")item.group.rotation.z+=dt*(.35+item.phase*.1);});updateScanners(dt,time);
   }
   function updatePaws(time){const walk=player.moving&&player.grounded&&state.playing?Math.sin(player.step):Math.sin(time*1.4)*.1;const bob=player.moving&&player.grounded?Math.abs(Math.sin(player.step*.5))*.026:0;leftPaw.position.set(-.24,-.45-bob+Math.max(0,walk)*.014,-.67+Math.max(0,walk)*.045);rightPaw.position.set(.24,-.45-bob-Math.min(0,walk)*.014,-.67+Math.max(0,-walk)*.045);leftPaw.rotation.z=-.04+walk*.035;rightPaw.rotation.z=.04-walk*.035;const reach=state.pawReachUntil-performance.now();if(reach>0){const amount=Math.sin((1-reach/720)*Math.PI);rightPaw.position.x-=amount*.05;rightPaw.position.y+=amount*.18;rightPaw.position.z+=amount*.15;rightPaw.rotation.x=amount*.2;}else rightPaw.rotation.x=-.03;}
-  function updateCamera(){camera.position.copy(player.position);camera.rotation.y=player.yaw;camera.rotation.x=player.pitch;camera.rotation.z=0;}
+  function updateCamera(){camera.position.copy(player.position);camera.rotation.y=state.runner?0:player.yaw;camera.rotation.x=state.runner?0:player.pitch;camera.rotation.z=0;}
   function animate(){requestAnimationFrame(animate);const dt=Math.min(.04,clock.getDelta()),time=clock.elapsedTime;if(state.active){updateMovement(dt);updateNearby();updateWorld(dt,time);updatePaws(time);updateCamera();}renderer.render(scene,camera);}animate();
   function setSize(){const width=Math.max(1,root.clientWidth),height=Math.max(1,root.clientHeight);renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();}new ResizeObserver(setSize).observe(root);setSize();
-  function clearInput(){keys.clear();state.touchMove.x=state.touchMove.y=0;state.stickPointer=null;stickKnob.style.transform="translate(0,0)";player.moving=false;}
-  function resetChapter(){buildChapter(state.chapter);memoryEl.hidden=true;completeEl.hidden=true;progressEl.hidden=true;showToast(state.chapter===2?"港口的霓虹里，有一束熟悉的光正在移动。":"空气里混着植物与熟悉食物的气味。",3800);}
-  function enterPlay(){clearInput();ensureAudio();state.playing=true;gate.hidden=true;if(!isTouch&&canvas.requestPointerLock)canvas.requestPointerLock();}
+  function clearInput(){keys.clear();state.touchMove.x=state.touchMove.y=0;state.stickPointer=null;state.holdingGlove=false;stickKnob.style.transform="translate(0,0)";player.moving=false;}
+  function resetChapter(){buildChapter(state.chapter);memoryEl.hidden=true;completeEl.hidden=true;progressEl.hidden=true;showToast(state.chapter===2?"外环航道已开启：跟随光羽，切换跑道并跳过低栏。":"零点塔的走廊正在重复，只有熟悉气味没有被扭曲。",3800);}
+  function enterPlay(){clearInput();ensureAudio();state.playing=true;gate.hidden=true;if(!isTouch&&!state.twoD&&canvas.requestPointerLock)canvas.requestPointerLock();}
   function showResume(){if(!state.active||state.complete||state.memoryOpen||!pauseScreen.hidden||isTouch)return;clearInput();state.playing=false;gate.hidden=false;gateTitle.textContent="继续探索";enterButton.textContent="返回场景";}
   function selectChapter(chapter){const shouldActive=gameScreen.classList.contains("is-active")&&chapter>=2;if(!shouldActive){if(state.active){state.active=false;root.hidden=true;gameScreen.classList.remove("later-chapter-active");}document.body.classList.remove("later-chapter-running");return;}const changed=state.chapter!==chapter;if(!state.active||changed){state.active=true;root.hidden=false;gameScreen.classList.add("later-chapter-active");document.body.classList.add("later-chapter-running");buildChapter(chapter);state.playing=false;gate.hidden=false;enterButton.textContent="进入场景";} }
   function syncActive(){const chapter=window.__starTailActiveChapter||1;if(chapter>=2)selectChapter(chapter);else selectChapter(0);}
 
   window.addEventListener("startail:chapter-select",event=>selectChapter(event.detail?.chapter||window.__starTailActiveChapter||1));
+  window.addEventListener("startail:chapter-enter",event=>{const chapter=event.detail?.chapter||window.__starTailActiveChapter||1;if(chapter<2)return;window.__starTailActiveChapter=chapter;selectChapter(chapter);if(state.active)enterPlay();});
   new MutationObserver(syncActive).observe(gameScreen,{attributes:true,attributeFilter:["class"]});
-  enterButton.addEventListener("click",enterPlay);memoryContinue.addEventListener("click",hideMemory);replayButton.addEventListener("click",()=>{resetChapter();state.playing=true;if(!isTouch&&canvas.requestPointerLock)canvas.requestPointerLock();});
+  enterButton.addEventListener("click",enterPlay);memoryContinue.addEventListener("click",hideMemory);replayButton.addEventListener("click",()=>{resetChapter();state.playing=true;if(!isTouch&&!state.twoD&&canvas.requestPointerLock)canvas.requestPointerLock();});
   nextButton.addEventListener("click",()=>{if(state.chapter===2){window.__starTailActiveChapter=3;window.dispatchEvent(new CustomEvent("startail:chapter-select",{detail:{chapter:3}}));}else{window.__starTailActiveChapter=1;document.querySelector("#returnTitleButton")?.click();}});
-  canvas.addEventListener("click",()=>{if(state.active&&state.playing&&!isTouch&&document.pointerLockElement!==canvas&&pauseScreen.hidden)canvas.requestPointerLock();});
+  canvas.addEventListener("click",()=>{if(state.active&&!state.twoD&&state.playing&&!isTouch&&document.pointerLockElement!==canvas&&pauseScreen.hidden)canvas.requestPointerLock();});
   document.addEventListener("pointerlockchange",()=>{if(state.active&&document.pointerLockElement!==canvas&&state.playing)showResume();});
   document.addEventListener("mousemove",event=>{if(!state.active||document.pointerLockElement!==canvas||!state.playing)return;player.yaw-=event.movementX*.00215;player.pitch=THREE.MathUtils.clamp(player.pitch-event.movementY*.00185,-.92,.78);});
-  window.addEventListener("keydown",event=>{if(!state.active)return;if(state.memoryOpen){if(["Escape","Enter","Space","KeyE"].includes(event.code)){event.preventDefault();event.stopImmediatePropagation();hideMemory();}return;}const handled=["KeyW","KeyA","KeyS","KeyD","ArrowUp","ArrowDown","Space","KeyQ","KeyE","ShiftLeft","ShiftRight","Escape"].includes(event.code);if(handled){event.preventDefault();event.stopImmediatePropagation();}if(event.repeat&&["Space","KeyQ"].includes(event.code))return;if(event.code==="Escape"){clearInput();if(document.pointerLockElement===canvas)document.exitPointerLock();if(pauseScreen.hidden)pauseButton.click();else resumeButton.click();return;}if(!pauseScreen.hidden)return;if(["KeyW","KeyA","KeyS","KeyD","ArrowUp","ArrowDown","ShiftLeft","ShiftRight"].includes(event.code))keys.add(event.code);if(event.code==="Space")jump();if(event.code==="KeyQ")setScent();if(event.code==="KeyE")interact();},true);
-  window.addEventListener("keyup",event=>{if(!state.active)return;if(["KeyW","KeyA","KeyS","KeyD","ArrowUp","ArrowDown","Space","KeyQ","KeyE","ShiftLeft","ShiftRight"].includes(event.code)){event.preventDefault();event.stopImmediatePropagation();}keys.delete(event.code);},true);
-  window.addEventListener("blur",()=>{if(state.active){clearInput();if(document.pointerLockElement===canvas)document.exitPointerLock();}});document.addEventListener("visibilitychange",()=>{if(document.hidden&&state.active)clearInput();});pauseButton?.addEventListener("click",()=>{if(state.active)clearInput();});resumeButton?.addEventListener("click",()=>{if(!state.active||state.complete)return;clearInput();state.playing=true;gate.hidden=true;if(!isTouch&&canvas.requestPointerLock)canvas.requestPointerLock();});restartButton?.addEventListener("click",()=>{if(!state.active)return;resetChapter();state.playing=true;gate.hidden=true;if(!isTouch&&canvas.requestPointerLock)canvas.requestPointerLock();});
+  window.addEventListener("keydown",event=>{if(!state.active)return;if(state.memoryOpen){if(["Escape","Enter","Space","KeyE"].includes(event.code)){event.preventDefault();event.stopImmediatePropagation();hideMemory();}return;}const handled=["KeyW","KeyA","KeyS","KeyD","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space","KeyQ","KeyE","ShiftLeft","ShiftRight","Escape"].includes(event.code);if(handled){event.preventDefault();event.stopImmediatePropagation();}if(event.repeat&&["Space","KeyQ"].includes(event.code))return;if(event.code==="Escape"){clearInput();if(document.pointerLockElement===canvas)document.exitPointerLock();if(pauseScreen.hidden)pauseButton.click();else resumeButton.click();return;}if(!pauseScreen.hidden)return;if(["KeyW","KeyA","KeyS","KeyD","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","ShiftLeft","ShiftRight"].includes(event.code))keys.add(event.code);if(event.code==="Space")jump();if(event.code==="KeyQ")setScent();if(event.code==="KeyE")interact();},true);
+  window.addEventListener("keyup",event=>{if(!state.active)return;if(["KeyW","KeyA","KeyS","KeyD","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space","KeyQ","KeyE","ShiftLeft","ShiftRight"].includes(event.code)){event.preventDefault();event.stopImmediatePropagation();}if(event.code==="KeyE")stopGloveHold();keys.delete(event.code);},true);
+  window.addEventListener("blur",()=>{if(state.active){clearInput();if(document.pointerLockElement===canvas)document.exitPointerLock();}});document.addEventListener("visibilitychange",()=>{if(document.hidden&&state.active)clearInput();});pauseButton?.addEventListener("click",()=>{if(state.active)clearInput();});resumeButton?.addEventListener("click",()=>{if(!state.active||state.complete)return;clearInput();state.playing=true;gate.hidden=true;if(!isTouch&&!state.twoD&&canvas.requestPointerLock)canvas.requestPointerLock();});restartButton?.addEventListener("click",()=>{if(!state.active)return;resetChapter();state.playing=true;gate.hidden=true;if(!isTouch&&!state.twoD&&canvas.requestPointerLock)canvas.requestPointerLock();});
   function updateStick(event){const rect=stick.getBoundingClientRect();let x=(event.clientX-(rect.left+rect.width/2))/(rect.width*.34),y=(event.clientY-(rect.top+rect.height/2))/(rect.height*.34);const len=Math.hypot(x,y);if(len>1){x/=len;y/=len;}state.touchMove.x=x;state.touchMove.y=y;stickKnob.style.transform=`translate(${x*31}px,${y*31}px)`;}
   stick.addEventListener("pointerdown",event=>{state.stickPointer=event.pointerId;stick.setPointerCapture(event.pointerId);updateStick(event);});stick.addEventListener("pointermove",event=>{if(event.pointerId===state.stickPointer)updateStick(event);});const stopStick=event=>{if(event.pointerId!==state.stickPointer)return;state.stickPointer=null;state.touchMove.x=state.touchMove.y=0;stickKnob.style.transform="translate(0,0)";};stick.addEventListener("pointerup",stopStick);stick.addEventListener("pointercancel",stopStick);
-  lookzone.addEventListener("pointerdown",event=>{state.lookPointer=event.pointerId;state.lookLast.x=event.clientX;state.lookLast.y=event.clientY;lookzone.setPointerCapture(event.pointerId);});lookzone.addEventListener("pointermove",event=>{if(event.pointerId!==state.lookPointer||!state.playing)return;const dx=event.clientX-state.lookLast.x,dy=event.clientY-state.lookLast.y;state.lookLast.x=event.clientX;state.lookLast.y=event.clientY;player.yaw-=dx*.0062;player.pitch=THREE.MathUtils.clamp(player.pitch-dy*.0052,-.92,.78);});["pointerup","pointercancel"].forEach(type=>lookzone.addEventListener(type,event=>{if(event.pointerId===state.lookPointer)state.lookPointer=null;}));touchSense.addEventListener("click",()=>setScent());touchJump.addEventListener("click",jump);touchInteract.addEventListener("click",interact);
+  lookzone.addEventListener("pointerdown",event=>{state.lookPointer=event.pointerId;state.lookLast.x=event.clientX;state.lookLast.y=event.clientY;lookzone.setPointerCapture(event.pointerId);});lookzone.addEventListener("pointermove",event=>{if(event.pointerId!==state.lookPointer||!state.playing)return;const dx=event.clientX-state.lookLast.x,dy=event.clientY-state.lookLast.y;state.lookLast.x=event.clientX;state.lookLast.y=event.clientY;player.yaw-=dx*.0062;player.pitch=THREE.MathUtils.clamp(player.pitch-dy*.0052,-.92,.78);});["pointerup","pointercancel"].forEach(type=>lookzone.addEventListener(type,event=>{if(event.pointerId===state.lookPointer)state.lookPointer=null;}));touchSense.addEventListener("click",()=>setScent());touchJump.addEventListener("click",jump);touchInteract.addEventListener("pointerdown",event=>{if(state.chapter===3&&state.nearby==="glove"){event.preventDefault();interact();}});["pointerup","pointercancel","pointerleave"].forEach(type=>touchInteract.addEventListener(type,stopGloveHold));touchInteract.addEventListener("click",()=>{if(!(state.chapter===3&&state.nearby==="glove"))interact();});
+  port2dFeathers.forEach((feather, index) => feather.addEventListener("click", () => { if (state.twoD && state.playing && index === state.stage) collectPortFeather(); }));
   window.__starTailLaterChapters={select:chapter=>{window.__starTailActiveChapter=chapter;selectChapter(chapter);},snapshot:()=>({chapter:state.chapter,stage:state.stage,complete:state.complete,position:player.position.toArray(),scent:state.scent})};syncActive();
 })();

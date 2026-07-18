@@ -61,6 +61,22 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
         <button id="chapter3dReplay" type="button">重新游玩</button>
       </div>
     </section>
+    <section class="chapter3d-bridge" id="chapter3dBridge" aria-label="第一章到第二章过场" hidden>
+      <video id="chapter3dBridgeVideo" preload="auto" playsinline>
+        <source src="assets/video/chapter-bridge/chapter-1-to-2.mp4" type="video/mp4" />
+      </video>
+      <div class="chapter3d-bridge-shade" aria-hidden="true"></div>
+      <header class="chapter3d-bridge-chrome">
+        <div class="chapter3d-bridge-progress"><i id="chapter3dBridgeProgress"></i></div>
+        <button id="chapter3dBridgeSkip" type="button">跳过过场</button>
+      </header>
+      <div class="chapter3d-bridge-launch" id="chapter3dBridgeLaunch" hidden>
+        <span>CHAPTER 02 / PORT OF EYES</span>
+        <h2>出发</h2>
+        <p>港口的霓虹重新亮起，下一段记忆正从噪声里发出回响。</p>
+        <button id="chapter3dBridgeStart" type="button">出发</button>
+      </div>
+    </section>
     <div class="chapter3d-lookzone" id="chapter3dLookzone" aria-hidden="true"></div>
     <div class="chapter3d-touch" aria-label="触屏游戏控制">
       <div class="chapter3d-joystick" id="chapter3dJoystick"><i></i></div>
@@ -92,6 +108,12 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   const completeEl = root.querySelector("#chapter3dComplete");
   const nextButton = root.querySelector("#chapter3dNext");
   const replayButton = root.querySelector("#chapter3dReplay");
+  const bridgeEl = root.querySelector("#chapter3dBridge");
+  const bridgeVideo = root.querySelector("#chapter3dBridgeVideo");
+  const bridgeProgress = root.querySelector("#chapter3dBridgeProgress");
+  const bridgeSkipButton = root.querySelector("#chapter3dBridgeSkip");
+  const bridgeLaunch = root.querySelector("#chapter3dBridgeLaunch");
+  const bridgeStartButton = root.querySelector("#chapter3dBridgeStart");
   const joystick = root.querySelector("#chapter3dJoystick");
   const joystickKnob = joystick.querySelector("i");
   const lookzone = root.querySelector("#chapter3dLookzone");
@@ -1029,6 +1051,11 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     collar.visible = true;
     memoryEl.hidden = true;
     completeEl.hidden = true;
+    bridgeVideo.pause();
+    bridgeVideo.currentTime = 0;
+    bridgeEl.hidden = true;
+    bridgeLaunch.hidden = true;
+    bridgeEl.classList.remove("is-finished");
     progressEl.hidden = true;
     progressFill.style.width = "0%";
     clearParticleSystem(memoryBurst);
@@ -1048,11 +1075,55 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     state.complete = true;
     state.playing = false;
     state.holdingInteract = false;
-    completeEl.hidden = false;
     if (document.pointerLockElement === canvas) document.exitPointerLock();
     tone(440, 0.3, "sine", 0.045);
     setTimeout(() => tone(660, 0.4, "sine", 0.04), 180);
     setTimeout(() => tone(880, 0.55, "triangle", 0.035), 360);
+    showChapterBridge();
+  }
+
+  function showChapterBridge() {
+    clearMovementInput();
+    state.playing = false;
+    completeEl.hidden = true;
+    bridgeEl.hidden = false;
+    bridgeLaunch.hidden = true;
+    bridgeSkipButton.hidden = false;
+    bridgeEl.classList.remove("is-finished");
+    bridgeProgress.style.width = "0%";
+    if (document.pointerLockElement === canvas) document.exitPointerLock();
+    bridgeVideo.currentTime = 0;
+    bridgeVideo.muted = document.querySelector("#soundButton")?.classList.contains("muted") || false;
+    const play = bridgeVideo.play();
+    if (play?.catch) play.catch(() => {
+      bridgeVideo.muted = true;
+      bridgeVideo.play().catch(showBridgeLaunch);
+    });
+  }
+
+  function updateBridgeProgress() {
+    if (Number.isFinite(bridgeVideo.duration) && bridgeVideo.duration > 0) {
+      bridgeProgress.style.width = `${Math.min(100, bridgeVideo.currentTime / bridgeVideo.duration * 100)}%`;
+    }
+  }
+
+  function showBridgeLaunch() {
+    bridgeVideo.pause();
+    bridgeEl.classList.add("is-finished");
+    bridgeSkipButton.hidden = true;
+    bridgeLaunch.hidden = false;
+    bridgeProgress.style.width = "100%";
+    bridgeStartButton.focus();
+  }
+
+  function enterSecondChapter() {
+    bridgeVideo.pause();
+    bridgeEl.hidden = true;
+    bridgeLaunch.hidden = true;
+    bridgeEl.classList.remove("is-finished");
+    window.__starTailActiveChapter = 2;
+    window.dispatchEvent(new CustomEvent("startail:chapter-select", { detail: { chapter: 2 } }));
+    window.dispatchEvent(new CustomEvent("startail:chapter-enter", { detail: { chapter: 2 } }));
   }
 
   function updateNearby() {
@@ -1297,6 +1368,10 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
       enterButton.textContent = "进入场景";
     } else {
       clearMovementInput();
+      bridgeVideo.pause();
+      bridgeEl.hidden = true;
+      bridgeLaunch.hidden = true;
+      bridgeEl.classList.remove("is-finished");
       if (document.pointerLockElement === canvas) document.exitPointerLock();
     }
   }
@@ -1317,10 +1392,11 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     state.playing = true;
     if (!isTouch && canvas.requestPointerLock) canvas.requestPointerLock();
   });
-  nextButton.addEventListener("click", () => {
-    window.__starTailActiveChapter = 2;
-    window.dispatchEvent(new CustomEvent("startail:chapter-select", { detail: { chapter: 2 } }));
-  });
+  nextButton.addEventListener("click", showChapterBridge);
+  bridgeVideo.addEventListener("timeupdate", updateBridgeProgress);
+  bridgeVideo.addEventListener("ended", showBridgeLaunch);
+  bridgeSkipButton.addEventListener("click", showBridgeLaunch);
+  bridgeStartButton.addEventListener("click", enterSecondChapter);
   canvas.addEventListener("click", () => {
     if (state.active && state.playing && !isTouch && document.pointerLockElement !== canvas && pauseScreen.hidden) canvas.requestPointerLock();
   });
@@ -1336,6 +1412,15 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
 
   window.addEventListener("keydown", event => {
     if (!state.active) return;
+    if (!bridgeEl.hidden) {
+      if (["Escape", "Enter", "Space"].includes(event.code)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (event.code === "Escape" || bridgeLaunch.hidden) showBridgeLaunch();
+        else enterSecondChapter();
+      }
+      return;
+    }
     if (state.memoryOpen) {
       if (["Escape", "Enter", "Space", "KeyE"].includes(event.code)) {
         event.preventDefault();
