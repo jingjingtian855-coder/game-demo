@@ -1240,9 +1240,9 @@ body.later-chapter-running #pauseScreen { background:#020711;backdrop-filter:non
 #pauseScreen .chapter-select-card.chapter-select-two:hover,#pauseScreen .chapter-select-card.chapter-select-two:focus-visible{transform:translateY(-25px) rotate(-1deg) scale(1.105)}
 #pauseScreen .chapter-card-art{position:absolute;z-index:-1;left:4%;right:4%;top:3%;height:68%;display:block;background-position:center;background-size:cover;clip-path:polygon(2% 4%,96% 0,100% 91%,91% 100%,0 92%);filter:saturate(1.1) contrast(1.05)}
 #pauseScreen .chapter-card-art::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 38%,rgba(1,8,18,.84));}
-#pauseScreen .chapter-select-one .chapter-card-art{background-image:url("assets/images/keyframes/corridor-first-person.png")}
-#pauseScreen .chapter-select-two .chapter-card-art{background-image:url("assets/images/keyframes/sense-trail.png")}
-#pauseScreen .chapter-select-three .chapter-card-art{background-image:url("assets/images/keyframes/final-choice.png")}
+#pauseScreen .chapter-select-one .chapter-card-art{background-image:url("assets/images/chapter-card-01.png")}
+#pauseScreen .chapter-select-two .chapter-card-art{background-image:url("assets/images/chapter-card-02.png")}
+#pauseScreen .chapter-select-three .chapter-card-art{background-image:url("assets/images/chapter-card-03.png")}
 #pauseScreen .chapter-card-paper{position:absolute;left:3%;right:1%;bottom:2%;min-height:35%;display:block;padding:clamp(14px,1.5vw,24px) clamp(14px,1.75vw,28px);color:#07111f;background:#fff7df;clip-path:polygon(3% 0,24% 4%,39% 0,89% 4%,100% 25%,97% 96%,66% 100%,37% 96%,5% 100%,0 74%);box-shadow:inset 0 0 24px rgba(148,122,84,.2)}
 #pauseScreen .chapter-card-paper::before{content:"";position:absolute;left:12%;right:16%;top:16%;height:19%;background:#27e0d1;opacity:.82;transform:skewX(-14deg) rotate(-2deg);z-index:-1}
 #pauseScreen .chapter-card-paper small{display:block;margin:0 0 6px;color:#07111f;font-size:clamp(11px,1.1vw,18px);font-weight:900;letter-spacing:.16em}
