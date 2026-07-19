@@ -140,29 +140,43 @@
   };
 
   class AudioEngine {
-    constructor() { this.ctx = null; this.master = null; this.drone = null; this.droneGain = null; }
+    constructor() { this.ctx = null; this.master = null; this.drone = null; this.droneGain = null; this.outputLevel = .58; }
     start() {
-      if (this.ctx) { this.ctx.resume(); return; }
+      if (this.ctx) {
+        if (this.ctx.state === "suspended") this.ctx.resume().catch(() => {});
+        return true;
+      }
       const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
+      if (!Ctx) return false;
       this.ctx = new Ctx();
-      this.master = this.ctx.createGain(); this.master.gain.value = .3; this.master.connect(this.ctx.destination);
-      this.droneGain = this.ctx.createGain(); this.droneGain.gain.value = .035; this.droneGain.connect(this.master);
+      this.master = this.ctx.createGain();
+      this.master.gain.value = state.muted ? 0 : this.outputLevel;
+      const compressor = this.ctx.createDynamicsCompressor();
+      compressor.threshold.value = -18;
+      compressor.knee.value = 16;
+      compressor.ratio.value = 5;
+      compressor.attack.value = .003;
+      compressor.release.value = .22;
+      this.master.connect(compressor); compressor.connect(this.ctx.destination);
+      this.droneGain = this.ctx.createGain(); this.droneGain.gain.value = .022; this.droneGain.connect(this.master);
       this.drone = this.ctx.createOscillator(); this.drone.type = "sine"; this.drone.frequency.value = 54;
       const filter = this.ctx.createBiquadFilter(); filter.type = "lowpass"; filter.frequency.value = 230;
       this.drone.connect(filter); filter.connect(this.droneGain); this.drone.start();
+      if (this.ctx.state === "suspended") this.ctx.resume().catch(() => {});
+      return true;
     }
     setScene(index) {
       if (!this.ctx || !this.drone) return;
       const f = [54, 66, 47][index]; this.drone.frequency.exponentialRampToValueAtTime(f, this.ctx.currentTime + 1.2);
     }
     tone(freq = 440, duration = .12, type = "sine", volume = .08, delay = 0) {
-      if (!this.ctx || state.muted) return;
+      if (!this.start() || !this.ctx || state.muted) return;
+      const startAt = this.ctx.currentTime + Math.max(0, delay);
       const o = this.ctx.createOscillator(), g = this.ctx.createGain();
-      o.type = type; o.frequency.value = freq; g.gain.setValueAtTime(0, this.ctx.currentTime + delay);
-      g.gain.linearRampToValueAtTime(volume, this.ctx.currentTime + delay + .01);
-      g.gain.exponentialRampToValueAtTime(.0001, this.ctx.currentTime + delay + duration);
-      o.connect(g); g.connect(this.master); o.start(this.ctx.currentTime + delay); o.stop(this.ctx.currentTime + delay + duration + .02);
+      o.type = type; o.frequency.value = freq; g.gain.setValueAtTime(.0001, startAt);
+      g.gain.linearRampToValueAtTime(volume, startAt + .01);
+      g.gain.exponentialRampToValueAtTime(.0001, startAt + duration);
+      o.connect(g); g.connect(this.master); o.start(startAt); o.stop(startAt + duration + .02);
     }
     chime() { [0, .11, .24].forEach((d, i) => this.tone([392, 523, 659][i], .45, "sine", .07, d)); }
     error() { this.tone(145, .22, "sawtooth", .04); }
@@ -182,9 +196,21 @@
       this.tone(first, duration, "triangle", volume);
       this.tone(second, duration * .9, "sine", volume * .62, .022);
     }
-    setMuted(muted) { if (this.master) this.master.gain.value = muted ? 0 : .3; }
+    setMuted(muted) {
+      if (!this.master || !this.ctx) return;
+      this.master.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.master.gain.setTargetAtTime(muted ? 0 : this.outputLevel, this.ctx.currentTime, .018);
+    }
   }
   const audio = new AudioEngine();
+  window.startailAudio = {
+    tone: (...args) => audio.tone(...args),
+    ui: kind => audio.ui(kind),
+    chime: () => audio.chime(),
+    error: () => audio.error(),
+    unlock: () => audio.start(),
+    isMuted: () => state.muted
+  };
 
   function initParticles() {
     el.particles.innerHTML = "";
@@ -722,20 +748,21 @@
 
   function bindButtonAudio() {
     const soundKind = button => {
-      if (button.matches("#startButton,#departureStartButton,#chapter3dEnter,#later3dEnter,#later3dMemoryContinue,#later3dNext,#storyNext,#puzzleClose,#chapter3dTouchInteract,#later3dInteract,.primary-button")) return "confirm";
-      if (button.matches("#pauseButton,#resumeButton,#soundButton,#settingsButton,#skipCinematic,#skipDepartureVideo,#textPrologueSkip")) return "soft";
-      if (button.matches("#returnTitleButton,#restartButton,#replayButton,#chapter3dReplay,#later3dReplay")) return "back";
+      if (button.matches("#startButton,#departureStartButton,#chapter3dEnter,#chapter3dMemoryContinue,#chapter3dNext,#chapter3dBridgeStart,#later3dEnter,#later3dMemoryContinue,#later3dCommunicatorContinue,#later3dNext,#later3dBridgeStart,#later3dFinalStart,#storyNext,#puzzleClose,#chapter3dTouchInteract,#later3dInteract,.chapter-select-card,.confirm-decision,.primary-button")) return "confirm";
+      if (button.matches("#pauseButton,#resumeButton,#soundButton,#settingsButton,#skipCinematic,#skipDepartureVideo,#textPrologueSkip,#chapter3dBridgeSkip,#later3dBridgeSkip,#chapter3dTouchSense,#later3dSense")) return "soft";
+      if (button.matches("#returnTitleButton,#restartButton,#replayButton,#chapter3dReplay,#later3dReplay,#later3dFinalReplay,#later3dFinalChapters,#later3dFinalReturn,.cancel-decision")) return "back";
       return "tap";
     };
     document.addEventListener("pointerdown", event => {
       const button = event.target.closest?.("button");
       if (!button || button.disabled) return;
+      if (button.matches("#soundButton,#settingsButton")) return;
       audio.ui(soundKind(button));
     }, true);
     document.addEventListener("keydown", event => {
       if (event.repeat || !["Enter", " "].includes(event.key)) return;
       const button = event.target.closest?.("button");
-      if (button && !button.disabled) audio.ui(soundKind(button));
+      if (button && !button.disabled && !button.matches("#soundButton,#settingsButton")) audio.ui(soundKind(button));
     }, true);
     document.addEventListener("pointerover", event => {
       if (!audio.ctx || state.muted || !matchMedia("(pointer:fine)").matches) return;
@@ -743,6 +770,28 @@
       if (!button || button.disabled || button.contains(event.relatedTarget)) return;
       audio.ui("hover");
     }, true);
+  }
+
+  function syncSoundState() {
+    el.sound.classList.toggle("muted", state.muted);
+    el.sound.setAttribute("aria-label", state.muted ? "开启声音" : "关闭声音");
+    el.settings.setAttribute("aria-label", state.muted ? "设置：声音已关闭" : "设置：声音已开启");
+    audio.setMuted(state.muted);
+  }
+
+  function toggleSound() {
+    if (state.muted) {
+      state.muted = false;
+      syncSoundState();
+      audio.ui("confirm");
+      return;
+    }
+    audio.ui("soft");
+    window.setTimeout(() => {
+      state.muted = true;
+      syncSoundState();
+      if ("speechSynthesis" in window) speechSynthesis.cancel();
+    }, 90);
   }
 
   function bindEvents() {
@@ -762,24 +811,25 @@
     el.restart.addEventListener("click", event => { event.stopImmediatePropagation(); openChapterSelect(); });
     el.chapterSelectBack.addEventListener("click", closeChapterSelect);
     $$(".chapter-select-card").forEach(card => card.addEventListener("click", () => startSelectedChapter(Number(card.dataset.chapter))));
-    el.settings.addEventListener("click", () => { el.sound.click(); el.settings.setAttribute("aria-label", state.muted ? "设置：声音已关闭" : "设置：声音已开启"); });
+    el.settings.addEventListener("click", toggleSound);
     el.returnTitle.addEventListener("click", returnToTitle);
-    el.sound.addEventListener("click", () => { state.muted = !state.muted; el.sound.classList.toggle("muted", state.muted); el.sound.setAttribute("aria-label", state.muted ? "开启声音" : "关闭声音"); audio.setMuted(state.muted); if (!state.muted) audio.ui("confirm"); if (state.muted && "speechSynthesis" in window) speechSynthesis.cancel(); });
+    el.sound.addEventListener("click", toggleSound);
     el.puzzleClose.addEventListener("click", () => { el.puzzle.hidden = true; state.paused = false; });
     $$(".signal-ring").forEach((ring, i) => ring.addEventListener("click", () => { if (state.flags.puzzleSolved) return; state.puzzle[i] = (state.puzzle[i] + 1) % 4; audio.tone(240 + i*100, .16, "triangle", .04); updatePuzzle(); }));
     el.replayFinal.addEventListener("click", () => resetGame(true)); el.replay.addEventListener("click", () => resetGame(false));
     window.addEventListener("keydown", e => {
       if (["ArrowLeft","ArrowRight","Space"].includes(e.code)) e.preventDefault();
       if (el.textPrologue.classList.contains("is-active")) {
-        if (["ArrowRight","Enter","Space"].includes(e.code) && !e.repeat) advanceTextPrologue();
-        if (e.code === "Escape") finishTextPrologue();
+        if (["ArrowRight","Enter","Space"].includes(e.code) && !e.repeat) { audio.ui("confirm"); advanceTextPrologue(); }
+        if (e.code === "Escape") { audio.ui("back"); finishTextPrologue(); }
         return;
       }
       if (el.departure.classList.contains("is-active")) {
         if (["Enter","Space"].includes(e.code) && !e.repeat) {
+          audio.ui("confirm");
           if (el.departureLaunch.hidden) showDepartureLaunch(); else enterFirstChapterFromDeparture();
         }
-        if (e.code === "Escape") showDepartureLaunch();
+        if (e.code === "Escape") { audio.ui("soft"); showDepartureLaunch(); }
         return;
       }
       if (e.repeat && ["KeyE","Space"].includes(e.code)) return;
@@ -788,7 +838,7 @@
       if (e.code === "Space" && el.cinematic.classList.contains("is-active")) setStabilityHold(true); else if (e.code === "Space") jump();
       if (e.code === "KeyE") interact();
       if (e.code === "ShiftLeft" || e.code === "ShiftRight") setSense(true);
-      if (e.code === "Escape") setPaused(!state.paused);
+      if (e.code === "Escape") { audio.ui(state.paused ? "confirm" : "soft"); setPaused(!state.paused); }
     });
     window.addEventListener("keyup", e => {
       if ((e.code === "ArrowLeft" || e.code === "KeyA") && state.moving < 0) state.moving = 0;

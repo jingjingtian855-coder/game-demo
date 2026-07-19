@@ -193,6 +193,7 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     lookLast: { x: 0, y: 0 },
     lastRobotHit: 0,
     lastScratchTone: 0,
+    lastStepTone: 0,
     pawReachUntil: 0
   };
 
@@ -887,13 +888,24 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   setCanvasSize();
 
   function ensureAudio() {
-    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioContext.state === "suspended") audioContext.resume();
+    if (window.startailAudio) {
+      window.startailAudio.unlock();
+      return true;
+    }
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return false;
+    if (!audioContext) audioContext = new AudioContextClass();
+    if (audioContext.state === "suspended") audioContext.resume().catch(() => {});
+    return true;
   }
 
   function tone(frequency, duration = 0.12, type = "sine", gainValue = 0.035) {
     try {
-      ensureAudio();
+      if (window.startailAudio) {
+        window.startailAudio.tone(frequency, duration, type, gainValue);
+        return;
+      }
+      if (!ensureAudio()) return;
       const oscillator = audioContext.createOscillator();
       const gain = audioContext.createGain();
       oscillator.type = type;
@@ -904,6 +916,15 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
       oscillator.start();
       oscillator.stop(audioContext.currentTime + duration);
     } catch (_) {}
+  }
+
+  function feedback(kind = "tap") {
+    if (window.startailAudio) {
+      if (kind === "error") window.startailAudio.error();
+      else window.startailAudio.ui(kind);
+      return;
+    }
+    tone(kind === "error" ? 145 : kind === "soft" ? 280 : 430, kind === "error" ? .18 : .07, kind === "error" ? "sawtooth" : "triangle", .025);
   }
 
   function showToast(text, duration = 2600) {
@@ -944,7 +965,7 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   }
 
   function toggleScent(force) {
-    if (!state.playing || state.complete) return;
+    if (!state.playing || state.complete) { feedback("error"); return; }
     state.scent = typeof force === "boolean" ? force : !state.scent;
     root.classList.toggle("scent-on", state.scent);
     scentEl.classList.toggle("active", state.scent);
@@ -981,9 +1002,10 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   }
 
   function startInteract() {
-    if (!state.playing || state.complete || !state.nearby) return;
+    if (!state.playing || state.complete || !state.nearby) { feedback("error"); return; }
     if (state.nearby === "collar") collectCollar();
     if (state.nearby === "cable") {
+      feedback("tap");
       state.holdingInteract = true;
       state.scratchStartedAt = performance.now() - state.scratch * 1000;
       progressEl.hidden = false;
@@ -1000,7 +1022,7 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   }
 
   function jump() {
-    if (!state.playing || state.complete || !player.grounded || !pauseScreen.hidden) return;
+    if (!state.playing || state.complete || !player.grounded || !pauseScreen.hidden) { feedback("error"); return; }
     player.velocityY = 4.35;
     player.grounded = false;
     tone(190, 0.12, "triangle", 0.025);
@@ -1179,6 +1201,12 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
       player.position.y = 1.13;
       player.velocityY = 0;
       player.grounded = true;
+    }
+
+    const now = performance.now();
+    if (player.moving && player.grounded && now - state.lastStepTone > (speed > 5 ? 205 : 275)) {
+      state.lastStepTone = now;
+      tone(92 + Math.random() * 24, .055, "triangle", .014);
     }
 
     if (state.stage === 2 && player.position.z < -45.2) finishChapter();
@@ -1398,7 +1426,7 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   bridgeSkipButton.addEventListener("click", showBridgeLaunch);
   bridgeStartButton.addEventListener("click", enterSecondChapter);
   canvas.addEventListener("click", () => {
-    if (state.active && state.playing && !isTouch && document.pointerLockElement !== canvas && pauseScreen.hidden) canvas.requestPointerLock();
+    if (state.active && state.playing && !isTouch && document.pointerLockElement !== canvas && pauseScreen.hidden) { feedback("soft"); canvas.requestPointerLock(); }
   });
 
   document.addEventListener("pointerlockchange", () => {
@@ -1504,6 +1532,7 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
     joystickKnob.style.transform = `translate(${x * 31}px,${y * 31}px)`;
   }
   joystick.addEventListener("pointerdown", event => {
+    feedback("soft");
     state.joystickPointer = event.pointerId;
     joystick.setPointerCapture(event.pointerId);
     updateJoystick(event);
@@ -1521,6 +1550,7 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
   joystick.addEventListener("pointercancel", clearJoystick);
 
   lookzone.addEventListener("pointerdown", event => {
+    feedback("soft");
     state.lookPointer = event.pointerId;
     state.lookLast.x = event.clientX;
     state.lookLast.y = event.clientY;
