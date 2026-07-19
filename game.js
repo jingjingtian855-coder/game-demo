@@ -140,7 +140,7 @@
   };
 
   class AudioEngine {
-    constructor() { this.ctx = null; this.master = null; this.drone = null; this.droneGain = null; this.outputLevel = .58; }
+    constructor() { this.ctx = null; this.master = null; this.drone = null; this.droneGain = null; this.outputLevel = .82; this.sfxBoost = 1.65; }
     start() {
       if (this.ctx) {
         if (this.ctx.state === "suspended") this.ctx.resume().catch(() => {});
@@ -172,9 +172,10 @@
     tone(freq = 440, duration = .12, type = "sine", volume = .08, delay = 0) {
       if (!this.start() || !this.ctx || state.muted) return;
       const startAt = this.ctx.currentTime + Math.max(0, delay);
+      const boostedVolume = Math.min(.18, volume * this.sfxBoost);
       const o = this.ctx.createOscillator(), g = this.ctx.createGain();
       o.type = type; o.frequency.value = freq; g.gain.setValueAtTime(.0001, startAt);
-      g.gain.linearRampToValueAtTime(volume, startAt + .01);
+      g.gain.linearRampToValueAtTime(boostedVolume, startAt + .01);
       g.gain.exponentialRampToValueAtTime(.0001, startAt + duration);
       o.connect(g); g.connect(this.master); o.start(startAt); o.stop(startAt + duration + .02);
     }

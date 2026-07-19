@@ -1444,6 +1444,8 @@ import escapePodUrl from "./assets/models/ue5-source/SM_EscapePod.glb";
       if (["Escape", "Enter", "Space"].includes(event.code)) {
         event.preventDefault();
         event.stopImmediatePropagation();
+        if (event.repeat) return;
+        feedback(bridgeLaunch.hidden ? "soft" : "confirm");
         if (event.code === "Escape" || bridgeLaunch.hidden) showBridgeLaunch();
         else enterSecondChapter();
       }
